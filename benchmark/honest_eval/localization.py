@@ -24,7 +24,14 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 
 def _keccak256(data: bytes) -> bytes:
-    """Keccak-256 via pycryptodome if available, else sha3_256 (close enough for selector lookup)."""
+    """Keccak-256 via pycryptodome, else pysha3.
+
+    audit-fixes: the old code silently fell back to ``hashlib.sha3_256``,
+    which is NIST SHA-3 — NOT Keccak-256 — and produced wrong function
+    selectors. A wrong hash is worse than an error, so this now fails loudly
+    instead of returning incorrect bytes. Install pycryptodome (it is in
+    requirements.txt).
+    """
     try:
         from Crypto.Hash import keccak as _keccak  # pycryptodome
         k = _keccak.new(digest_bits=256)
@@ -39,9 +46,12 @@ def _keccak256(data: bytes) -> bytes:
         return k.digest()
     except ImportError:
         pass
-    # Fallback: Python 3.6+ hashlib has sha3_256 but NOT keccak — still useful
-    # for approximate matching when neither crypto lib is available.
-    return hashlib.sha3_256(data).digest()
+    raise ImportError(
+        "Keccak-256 requires pycryptodome (or pysha3): "
+        "pip install pycryptodome. Refusing to fall back to hashlib.sha3_256, "
+        "which computes NIST SHA-3, not Keccak-256, and would silently produce "
+        "wrong function selectors."
+    )
 
 
 def _fn_selector(sig: str) -> str:

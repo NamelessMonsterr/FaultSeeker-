@@ -11,7 +11,7 @@
 [![Chains](https://img.shields.io/badge/Chains-10%20EVM-f97316?style=flat-square&logo=ethereum&logoColor=white)](#-supported-networks)
 [![Dataset](https://img.shields.io/badge/Dataset-1059%20Exploit%20Txns-dc2626?style=flat-square&logo=databricks&logoColor=white)](#-benchmark--evaluation)
 [![Benign](https://img.shields.io/badge/Benign-10000%20Real%20Traces-0ea5e9?style=flat-square&logo=databricks&logoColor=white)](#-benchmark--evaluation)
-[![Tests](https://img.shields.io/badge/Tests-124%20Passing-16a34a?style=flat-square&logo=pytest&logoColor=white)](#-development)
+[![Tests](https://img.shields.io/badge/Tests-201%20Passing-16a34a?style=flat-square&logo=pytest&logoColor=white)](#-development)
 [![Status](https://img.shields.io/badge/Status-Research%20Active-6366f1?style=flat-square)](#-citation)
 
 
