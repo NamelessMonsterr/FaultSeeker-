@@ -1,0 +1,25 @@
+{
+  "txn_hash": "0x1b4730e715286862042def956d5aaa6a53203ee02b97ea913de73fa462e48f90",
+  "chain": "eth",
+  "vuln_type": "Rug Pull",
+  "protocol": "BUBAI",
+  "incident_date": "2024-10-29",
+  "sources": "DeFiHackLabs src/test/2024-10/BUBAI_exp.sol; https://x.com/TenArmorAlert/status/1851445795918118927",
+  "added": "audit-fixes round2 (2026-10-06): replacement for nibble-detector-patterned row",
+  "verification": {
+    "hash_format_valid": true,
+    "not_patterned_nibble_detector": true,
+    "not_duplicate_in_benchmark": true,
+    "source_documented": true,
+    "onchain_resolvable": false,
+    "onchain_note": "not independently RPC-verified; sourced from documented incident"
+  },
+  "trace_derived": {
+    "functioncall_count": null,
+    "address_count": null,
+    "max_depth": null,
+    "gas_cost": null,
+    "class": null,
+    "note": "left empty: no trace bundle available; not fabricated"
+  }
+}

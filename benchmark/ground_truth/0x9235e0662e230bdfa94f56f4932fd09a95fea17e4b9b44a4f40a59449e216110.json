@@ -1,0 +1,25 @@
+{
+  "txn_hash": "0x9235e0662e230bdfa94f56f4932fd09a95fea17e4b9b44a4f40a59449e216110",
+  "chain": "eth",
+  "vuln_type": "Flashloan Price Oracle Manipulation",
+  "protocol": "UwuLend (2nd attack)",
+  "incident_date": "2024-06-13",
+  "sources": "DeFiHackLabs src/test/2024-06/UwuLend_Second_exp.sol; cryptopolitan.com",
+  "added": "audit-fixes round2 (2026-10-06): replacement for nibble-detector-patterned row",
+  "verification": {
+    "hash_format_valid": true,
+    "not_patterned_nibble_detector": true,
+    "not_duplicate_in_benchmark": true,
+    "source_documented": true,
+    "onchain_resolvable": false,
+    "onchain_note": "not independently RPC-verified; sourced from documented incident"
+  },
+  "trace_derived": {
+    "functioncall_count": null,
+    "address_count": null,
+    "max_depth": null,
+    "gas_cost": null,
+    "class": null,
+    "note": "left empty: no trace bundle available; not fabricated"
+  }
+}

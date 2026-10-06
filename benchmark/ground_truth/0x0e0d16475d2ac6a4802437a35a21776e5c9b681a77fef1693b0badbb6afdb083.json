@@ -1,0 +1,25 @@
+{
+  "txn_hash": "0x0e0d16475d2ac6a4802437a35a21776e5c9b681a77fef1693b0badbb6afdb083",
+  "chain": "eth",
+  "vuln_type": "Access Control",
+  "protocol": "Parity multisig theft",
+  "incident_date": "2017-07-19",
+  "sources": "etherscan.io tx; coindesk.com 2017-07-19",
+  "added": "audit-fixes round2 (2026-10-06): replacement for nibble-detector-patterned row",
+  "verification": {
+    "hash_format_valid": true,
+    "not_patterned_nibble_detector": true,
+    "not_duplicate_in_benchmark": true,
+    "source_documented": true,
+    "onchain_resolvable": false,
+    "onchain_note": "not independently RPC-verified; sourced from documented incident"
+  },
+  "trace_derived": {
+    "functioncall_count": null,
+    "address_count": null,
+    "max_depth": null,
+    "gas_cost": null,
+    "class": null,
+    "note": "left empty: no trace bundle available; not fabricated"
+  }
+}

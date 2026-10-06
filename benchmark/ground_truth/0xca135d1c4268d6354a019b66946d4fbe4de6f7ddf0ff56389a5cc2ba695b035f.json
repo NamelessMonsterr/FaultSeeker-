@@ -1,0 +1,25 @@
+{
+  "txn_hash": "0xca135d1c4268d6354a019b66946d4fbe4de6f7ddf0ff56389a5cc2ba695b035f",
+  "chain": "eth",
+  "vuln_type": "Incorrect Reward Calculation",
+  "protocol": "Cover Protocol",
+  "incident_date": "2020-12-28",
+  "sources": "mudit.blog cover-protocol-hack-analysis; DeFiHackLabs src/test/2020-12/Cover_exp.sol",
+  "added": "audit-fixes round2 (2026-10-06): replacement for nibble-detector-patterned row",
+  "verification": {
+    "hash_format_valid": true,
+    "not_patterned_nibble_detector": true,
+    "not_duplicate_in_benchmark": true,
+    "source_documented": true,
+    "onchain_resolvable": false,
+    "onchain_note": "not independently RPC-verified; sourced from documented incident"
+  },
+  "trace_derived": {
+    "functioncall_count": null,
+    "address_count": null,
+    "max_depth": null,
+    "gas_cost": null,
+    "class": null,
+    "note": "left empty: no trace bundle available; not fabricated"
+  }
+}
