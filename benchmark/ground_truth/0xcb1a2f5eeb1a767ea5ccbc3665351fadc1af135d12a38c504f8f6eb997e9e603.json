@@ -1,0 +1,28 @@
+{
+  "name": "LavaLending",
+  "cause": "Flash Loan Attack",
+  "platform": "Arbitrum",
+  "transaction_hash": [
+    "0xcb1a2f5eeb1a767ea5ccbc3665351fadc1af135d12a38c504f8f6eb997e9e603"
+  ],
+  "complexity_level": "",
+  "time": "",
+  "lost": "unknown",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://github.com/helios-tt/report-public']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://github.com/helios-tt/report-public"
+    ]
+  }
+}

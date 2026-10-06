@@ -1,0 +1,28 @@
+{
+  "name": "WebKey",
+  "cause": "Incorrect Input Validation",
+  "platform": "BNBChain",
+  "transaction_hash": [
+    "0xc9bccafdb0cd977556d1f88ac39bf8b455c0275ac1dd4b51d75950fb58bad4c8"
+  ],
+  "complexity_level": "",
+  "time": "2025-03-14",
+  "lost": "$737K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://olympixai.medium.com/filament-webkey-venus-drained-for-2m-price-oracles-fixed-params-and-flash-loans-abused-56a4e67f8208']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://olympixai.medium.com/filament-webkey-venus-drained-for-2m-price-oracles-fixed-params-and-flash-loans-abused-56a4e67f8208"
+    ]
+  }
+}

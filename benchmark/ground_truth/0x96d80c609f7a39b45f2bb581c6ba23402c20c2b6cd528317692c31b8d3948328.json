@@ -1,0 +1,29 @@
+{
+  "name": "FireBirdPair",
+  "cause": "Logic Flaw",
+  "platform": "Polygon",
+  "transaction_hash": [
+    "0x96d80c609f7a39b45f2bb581c6ba23402c20c2b6cd528317692c31b8d3948328"
+  ],
+  "complexity_level": "",
+  "time": "2023-09-30",
+  "lost": "~$3.2K MATIC",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://github.com/tundachef/defihacklabs', 'https://github.com/anxiaoluo/defihacklabs']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://github.com/tundachef/defihacklabs",
+      "https://github.com/anxiaoluo/defihacklabs"
+    ]
+  }
+}

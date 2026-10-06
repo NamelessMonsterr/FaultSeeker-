@@ -1,0 +1,28 @@
+{
+  "name": "ImpermaxV3",
+  "cause": "Flash Loan Attack",
+  "platform": "Base",
+  "transaction_hash": [
+    "0xde903046b5cdf27a5391b771f41e645e9cc670b649f7b87b1524fc4076f45983"
+  ],
+  "complexity_level": "",
+  "time": "2025-04-26",
+  "lost": "~$300K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2025-04/ImpermaxV3_exp.sol']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2025-04/ImpermaxV3_exp.sol"
+    ]
+  }
+}

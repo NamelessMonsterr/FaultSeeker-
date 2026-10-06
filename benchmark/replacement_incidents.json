@@ -1,0 +1,603 @@
+[
+ {
+  "chain": "bsc",
+  "vuln_type": "Logic Flaw",
+  "tx_hash": "0x660837a1640dd9cc0561ab7ff6c85325edebfa17d8b11a3bb94457ba6dcae18c",
+  "name": "Orion Protocol",
+  "date": "2024-05-28",
+  "sources": [
+   "https://github.com/kismp123/defi-security-incident/blob/HEAD/2024/2024-05-28_OrionProtocol_BusinessLogic_BSC.md"
+  ],
+  "lost": "~$645K"
+ },
+ {
+  "chain": "bsc",
+  "vuln_type": "Rug Pull",
+  "tx_hash": "0xbc01ea37bd2ff8f6aa6afcfbe0406114ff27a01e9aa56102bfa4ad8a0c2f25ee",
+  "name": "SKP Token",
+  "date": "2026-05-26",
+  "sources": [
+   "https://github.com/SunWeb3Sec/DeFiHackLabs"
+  ],
+  "lost": "~$212K"
+ },
+ {
+  "chain": "bsc",
+  "vuln_type": "Incorrect Input Validation",
+  "tx_hash": "0xc9bccafdb0cd977556d1f88ac39bf8b455c0275ac1dd4b51d75950fb58bad4c8",
+  "name": "WebKey",
+  "date": "2025-03-14",
+  "sources": [
+   "https://olympixai.medium.com/filament-webkey-venus-drained-for-2m-price-oracles-fixed-params-and-flash-loans-abused-56a4e67f8208"
+  ],
+  "lost": "$737K"
+ },
+ {
+  "chain": "bsc",
+  "vuln_type": "Flash Loan Attack",
+  "tx_hash": "0x897c2de73dd55d7701e1b69ffb3a17b0f4801ced88b0c75fe1551c5fcce6a979",
+  "name": "PancakeBunny",
+  "date": "2021-05-19",
+  "sources": [
+   "https://github.com/SunWeb3Sec/DeFiHackLabs/blob/main/src/test/2021-05/PancakeBunny_exp.sol",
+   "https://rekt.news/pancakebunny-rekt/"
+  ],
+  "lost": "~$45M"
+ },
+ {
+  "chain": "bsc",
+  "vuln_type": "Reflection Token",
+  "tx_hash": "0x48e52a12cb297354a2a1c54cbc897cf3772328e7e71f51c9889bb8c5e533a934",
+  "name": "SafeMoon",
+  "date": "2023-03-28",
+  "sources": [
+   "https://www.cointime.ai/@QuillAudits/decoding-safemoon-protocols-89-million-exploit-quillaudits-14345",
+   "https://github.com/1712n/dn-institute/blob/HEAD/content/research/cyberattacks/incidents/2023-03-28-Safemoon.md"
+  ],
+  "lost": "~$8.9M"
+ },
+ {
+  "chain": "bsc",
+  "vuln_type": "Deflationary Token Attack",
+  "tx_hash": "0xf8f431b392a50eb997ecae2e35668d6dd4dc8568d002057600d2532e18f36d86",
+  "name": "WHALE",
+  "date": "2026-06",
+  "sources": [
+   "https://github.com/sanbir/evm-hack-registry/blob/HEAD/2026-06-WHALE_exp/WHALE_exp.md"
+  ],
+  "lost": "~$3,460"
+ },
+ {
+  "chain": "zksync",
+  "vuln_type": "Donation Attack",
+  "tx_hash": "0x35a0172fb6bd450ceb29aa67dc85221826dfd0b7528375400b4ccf15c1eed0d8",
+  "name": "Venus",
+  "date": "2025-02-27",
+  "sources": [
+   "https://olympixai.medium.com/filament-webkey-venus-drained-for-2m-price-oracles-fixed-params-and-flash-loans-abused-56a4e67f8208"
+  ],
+  "lost": "$716K"
+ },
+ {
+  "chain": "zksync",
+  "vuln_type": "Business Logic Flaw",
+  "tx_hash": "0xce7125b2104e5dd8156357be6febe6ee59ddcbd79ae010166df69487ae17b5bc",
+  "name": "Velocore",
+  "date": "2024-06-02",
+  "sources": [
+   "https://www.tronweekly.com/velocore-suspected-hack-10m-in-user-lps-stolen/",
+   "https://immunebytes.medium.com/velocore-finance-exploit-june-2-2024-detailed-analysis-immunebytes-f8ce25857a08"
+  ],
+  "lost": "~$7M"
+ },
+ {
+  "chain": "zksync",
+  "vuln_type": "Access Control",
+  "tx_hash": "0x6ce101943b300fe12f18e7bc4c2797d59aa9eab426c10d7914b0362f9278adfa",
+  "name": "Merlin DEX",
+  "date": "2023-04-25",
+  "sources": [
+   "https://github.com/NanoJS10/merlin-dex-forensic-investigation",
+   "https://rekt.news/merlin-dex-rekt"
+  ],
+  "lost": "~$1.82M"
+ },
+ {
+  "chain": "eth",
+  "vuln_type": "Reentrancy",
+  "tx_hash": "0xa84aa065ce61dbb1eb50ab6ae67fc31a9da50dd2c74eefd561661bfce2f1620c",
+  "name": "Curve Finance",
+  "date": "2023-07-30",
+  "sources": [
+   "https://github.com/kismp123/defi-security-incident/blob/HEAD/2023/2023-07-30_Curve_VyperReentrancy_ETH.md"
+  ],
+  "lost": "~$70M"
+ },
+ {
+  "chain": "arbitrum",
+  "vuln_type": "Flash Loan Attack",
+  "tx_hash": "0xcb1a2f5eeb1a767ea5ccbc3665351fadc1af135d12a38c504f8f6eb997e9e603",
+  "name": "LavaLending",
+  "date": "",
+  "sources": [
+   "https://github.com/helios-tt/report-public"
+  ],
+  "lost": "unknown"
+ },
+ {
+  "chain": "arbitrum",
+  "vuln_type": "Integer Underflow",
+  "tx_hash": "0x1ce7e9a9e3b6dd3293c9067221ac3260858ce119ecb7ca860eac28b2474c7c9b",
+  "name": "RadiantCapital",
+  "date": "2024-01-02",
+  "sources": [
+   "https://blog.verichains.io",
+   "https://github.com/kismp123/defi-security-incident"
+  ],
+  "lost": "~$4.5M"
+ },
+ {
+  "chain": "arbitrum",
+  "vuln_type": "Reentrancy",
+  "tx_hash": "0xa9ff2b587e2741575daf893864710a5cbb44bb64ccdc487a100fa20741e0f74d",
+  "name": "Sentiment",
+  "date": "2023-04-04",
+  "sources": [
+   "https://quillaudits.com/blog/hack-analysis/rodeo-finance-hack"
+  ],
+  "lost": "~$1M"
+ },
+ {
+  "chain": "arbitrum",
+  "vuln_type": "Price Manipulation",
+  "tx_hash": "0x57e555328b7def90e1fc2a0f7aa6df8d601a8f15803800a5aaf0a20382f21fbd",
+  "name": "WooFi",
+  "date": "2024-03-05",
+  "sources": [
+   "https://github.com/1712n/dn-institute",
+   "https://github.com/kismp123/defi-security-incident"
+  ],
+  "lost": "~$8.75M"
+ },
+ {
+  "chain": "arbitrum",
+  "vuln_type": "Business Logic Flaw",
+  "tx_hash": "0xfaf84cabc3e1b0cf1ff1738dace1b2810f42d98baeea17b146ae032f0bdf82d5",
+  "name": "SperaxUSD",
+  "date": "2023-02-03",
+  "sources": [
+   "https://github.com/0xprinc/evm-attacks-reproduced",
+   "https://github.com/sanbir/evm-hack-registry"
+  ],
+  "lost": "~$309K"
+ },
+ {
+  "chain": "arbitrum",
+  "vuln_type": "Logic Flaw",
+  "tx_hash": "0x6caa65b3fc5c8d4c7104574c3a15cd6208f742f9ada7d81ba027b20473137705",
+  "name": "Yield",
+  "date": "2024-04",
+  "sources": [
+   "https://github.com/bixia/defihacklabs"
+  ],
+  "lost": "n/a"
+ },
+ {
+  "chain": "arbitrum",
+  "vuln_type": "Access Control",
+  "tx_hash": "0x64490459485bf290ef00b360d3ea943fc56bcb364852ac482b772829cf09cad9",
+  "name": "Steadefi",
+  "date": "2023-08-07",
+  "sources": [
+   "https://github.com/1712n/dn-institute/blob/HEAD/content/research/cyberattacks/incidents/2023-08-07-Steadefi.md"
+  ],
+  "lost": "~$1.14M"
+ },
+ {
+  "chain": "arbitrum",
+  "vuln_type": "Oracle Manipulation",
+  "tx_hash": "0x98f1e234faac8b7f7ceaffe4e8e0581038678d95710b646db45ec3de47e6c3af",
+  "name": "RodeoFinance",
+  "date": "2023-07-11",
+  "sources": [
+   "https://quillaudits.com/blog/hack-analysis/rodeo-finance-hack",
+   "https://github.com/1712n/dn-institute"
+  ],
+  "lost": "~$888K"
+ },
+ {
+  "chain": "arbitrum",
+  "vuln_type": "Precision Loss",
+  "tx_hash": "0xe4dfc8b8b54eb7e101d59cd9f87f389186b2e8f6e188557ae9dfdbea2b12e703",
+  "name": "Balancer",
+  "date": "2025-11-03",
+  "sources": [
+   "https://rekt.news/balancer-rekt2",
+   "https://www.quillaudits.com/blog/hack-analysis/the-balancer-hack"
+  ],
+  "lost": "~$1.7M (462 ETH Arbitrum leg)"
+ },
+ {
+  "chain": "polygon",
+  "vuln_type": "Access Control",
+  "tx_hash": "0x6fa6374d43df083679cdab97149af8207cda2471620a06d3f28b115136b8e2c4",
+  "name": "Phoenix",
+  "date": "2023-03",
+  "sources": [
+   "https://github.com/sanbir/evm-hack-registry"
+  ],
+  "lost": "~$100K"
+ },
+ {
+  "chain": "polygon",
+  "vuln_type": "Price Oracle Manipulation",
+  "tx_hash": "0x31957ecc43774d19f54d9968e95c69c882468b46860f921668f2c55fadd51b19",
+  "name": "BonqDAO",
+  "date": "2023-02-01",
+  "sources": [
+   "https://numencyber.com",
+   "https://de.fi/blog"
+  ],
+  "lost": "~$120M at-risk"
+ },
+ {
+  "chain": "polygon",
+  "vuln_type": "Reentrancy",
+  "tx_hash": "0x0053490215baf541362fc78be0de98e3147f40223238d5b12512b3e26c0a2c2f",
+  "name": "MidasCapital",
+  "date": "2023-01-16",
+  "sources": [
+   "https://udbx.com",
+   "https://github.com/nethermindeth/forta-agents"
+  ],
+  "lost": "~$660K"
+ },
+ {
+  "chain": "polygon",
+  "vuln_type": "Lack Of Access Control",
+  "tx_hash": "0x554c9e4067e3bc0201ba06fc2cfeeacd178d7dd9c69f9b211bc661bb11296fde",
+  "name": "BTC24H",
+  "date": "2024-12",
+  "sources": [
+   "https://github.com/helios-tt/report-public",
+   "https://github.com/zyy0530/txraydefihacklabsevaluation"
+  ],
+  "lost": "~$81K"
+ },
+ {
+  "chain": "polygon",
+  "vuln_type": "Logic Flaw",
+  "tx_hash": "0x96d80c609f7a39b45f2bb581c6ba23402c20c2b6cd528317692c31b8d3948328",
+  "name": "FireBirdPair",
+  "date": "2023-09-30",
+  "sources": [
+   "https://github.com/tundachef/defihacklabs",
+   "https://github.com/anxiaoluo/defihacklabs"
+  ],
+  "lost": "~$3.2K MATIC"
+ },
+ {
+  "chain": "polygon",
+  "vuln_type": "Arithmetic Issues",
+  "tx_hash": "0x167993d4cc39771923a6cd11d2d6e73a1b68c7464ea3c76ba41fbd32df7a96da",
+  "name": "Balancer",
+  "date": "2025-11-03",
+  "sources": [
+   "https://rekt.news/balancer-rekt2",
+   "https://www.quillaudits.com/blog/hack-analysis/the-balancer-hack"
+  ],
+  "lost": "~$390K (Polygon leg)"
+ },
+ {
+  "chain": "polygon",
+  "vuln_type": "Business Logic Flaw",
+  "tx_hash": "0x7b8d641d76affcc029fd0e0f06ab81ad675b1da21ef79b82e1343016040ba359",
+  "name": "HumaFinance",
+  "date": "2026-05-11",
+  "sources": [
+   "https://github.com/SunWeb3Sec/DeFiHackLabs/pull/1089",
+   "https://github.com/sanbir/evm-hack-registry/blob/HEAD/2026-05-HumaCreditApprovalBypass_exp/HumaCreditApprovalBypass_exp.md"
+  ],
+  "lost": "~$101.4K"
+ },
+ {
+  "chain": "polygon",
+  "vuln_type": "Flash Loan Attack",
+  "tx_hash": "0x10f2c28f5d6cd8d7b56210b4d5e0cece27e45a30808cd3d3443c05d4275bb008",
+  "name": "0VIX",
+  "date": "2023-04-28",
+  "sources": [
+   "https://github.com/snakerzr/dn-institute/blob/HEAD/content/attacks/posts/2023-04-28-0vix.md",
+   "https://github.com/kismp123/defi-security-incident/blob/HEAD/2023/2023-04-28_0vixProtocol_PriceDependency_Polygon.md"
+  ],
+  "lost": "~$2M"
+ },
+ {
+  "chain": "avalanche",
+  "vuln_type": "Flash Loan Attack",
+  "tx_hash": "0x1266a937c2ccd970e5d7929021eed3ec593a95c68a99b4920c2efa226679b430",
+  "name": "PlatypusFinance",
+  "date": "2023-02-16",
+  "sources": [
+   "https://cointelegraph.com/news/decentralized-exchange-gmx-suffers-565k-price-manipulation-exploit",
+   "https://unchainedcrypto.com"
+  ],
+  "lost": "~$8.5M"
+ },
+ {
+  "chain": "avalanche",
+  "vuln_type": "Reentrancy",
+  "tx_hash": "0x4f37ffecdad598f53b8d5a2d9df98e3c00fbda4328585eb9947a412b5fe17ac5",
+  "name": "StarsArena",
+  "date": "2023-10-07",
+  "sources": [
+   "https://slowmist.medium.com/a-deep-dive-into-the-stars-arena-attack-765649d7fc6a",
+   "https://www.certik.com"
+  ],
+  "lost": "~$2.9M"
+ },
+ {
+  "chain": "avalanche",
+  "vuln_type": "Incorrect Input Validation",
+  "tx_hash": "0xece4efbe11e59d457cb1359ebdc4efdffdd310f0a82440be03591f2e27d2b59e",
+  "name": "DeltaPrime",
+  "date": "2024-11-11",
+  "sources": [
+   "https://threesigma.xyz/blog/exploit/deltaprime-defi-exploit-avalanche-arbitrum-hack",
+   "https://rekt.news/deltaprime-rekt2"
+  ],
+  "lost": "~$4.8M total (~$4.1M Avalanche)"
+ },
+ {
+  "chain": "avalanche",
+  "vuln_type": "Price Manipulation",
+  "tx_hash": "0x0ab12913f9232b27b0664cd2d50e482ad6aa896aeb811b53081712f42d54c026",
+  "name": "NereusFinance",
+  "date": "2022-09-06",
+  "sources": [
+   "https://www.certik.com/blog/cauldron-flashloan-attack",
+   "https://github.com/farazsth98/real-world-ethereum-hacks-remastered/blob/HEAD/contracts/NereusFlashLoanAttack/NereusFlashLoanAttack.md"
+  ],
+  "lost": "~$371K"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Flash Loan Attack",
+  "tx_hash": "0x6e9ebcdebbabda04fa9f2e3bc21ea8b2e4fb4bf4f4670cb8483e2f0b2604f451",
+  "name": "Hundred Finance",
+  "date": "2023-04-15",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2023-04/HundredFinance_2_exp.sol",
+   "https://cointelegraph.com/news/hundred-finance-loses-7-million-in-optimism-hack"
+  ],
+  "lost": "$7.4M"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Insufficient Validation",
+  "tx_hash": "0x3d6367de5c191204b44b8a5cf975f257472087a9aadc59b5d744ffdef33a520e",
+  "name": "Exactly Protocol",
+  "date": "2023-08-18",
+  "sources": [
+   "https://olympixai.medium.com/exactlys-7-3m-exploit-shows-what-happens-when-contracts-assume-too-much-93289aaeccf3",
+   "https://github.com/1712n/dn-institute/blob/HEAD/content/research/cyberattacks/incidents/2023-08-18-Exactly%20Protocol.md"
+  ],
+  "lost": "$7.2M"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Precision Loss",
+  "tx_hash": "0x9312ae377d7ebdf3c7c3a86f80514878deb5df51aad38b6191d55db53e42b7f0",
+  "name": "Sonne Finance",
+  "date": "2024-05-14",
+  "sources": [
+   "https://medium.com/@SonneFinance/post-mortem-sonne-finance-exploit-12f3daa82b06",
+   "https://www.quillaudits.com/blog/hack-analysis/sonne-finance-hack"
+  ],
+  "lost": "$20M"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Reentrancy",
+  "tx_hash": "0xca7c1a0fde444e1a68a8c2b8ae3fb76ec384d1f7ae9a50d26f8bfdd37c7a0afe",
+  "name": "Arcadia Finance",
+  "date": "2023-07-10",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2023-07/ArcadiaFi_exp.sol"
+  ],
+  "lost": "$455K"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Access Control",
+  "tx_hash": "0x6baa6332f9a3ed75e727311d6317fb636844d61d9df5e199f9f68711eb632d6f",
+  "name": "Pike Finance",
+  "date": "2024-04-30",
+  "sources": [
+   "https://www.certik.com/blog/pike-finance-incident-analysis"
+  ],
+  "lost": "~$1.68M"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Business Logic Flaw",
+  "tx_hash": "0x4ec3061724ca9f0b8d400866dd83b92647ad8c943a1c0ae9ae6c9bd1ef789417",
+  "name": "MOBOX",
+  "date": "2024-03-14",
+  "sources": [
+   "https://www.chaincatcher.com/en/article/2117891",
+   "https://blog.verichains.io/p/mo-dual-weaknesses-in-a-single-function"
+  ],
+  "lost": "~$750K"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Bypassed Insolvency Check",
+  "tx_hash": "0x18e34ce214211afedb6008c0cd00d476ce71222643521dbff5e2b65cdb2ccb80",
+  "name": "Interest Protocol",
+  "date": "2026-03-24",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2026-03/Univ3CollateralToken_exp.sol",
+   "https://x.com/DefimonAlerts/status/2036449500512891317"
+  ],
+  "lost": "~$57K"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Flash Loan Attack",
+  "tx_hash": "0xd12016b25d7aef681ade3dc3c9d1a1cc12f35b2c99953ff0e0ee23a59454c4fe",
+  "name": "Moonhacker",
+  "date": "2024-12-23",
+  "sources": [
+   "https://blog.solidityscan.com/moonhacker-vault-hack-analysis-ab122cb226f6",
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2024-12/Moonhacker_exp.sol"
+  ],
+  "lost": "~$320K"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Incorrect Access Control",
+  "tx_hash": "0x5dc519726e1236eb846271f6699e03cdd1a8fd593a2900c71cd2aabbdb7c92e6",
+  "name": "Quixotic",
+  "date": "2022-07-01",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2022-07/Quixotic_exp.sol"
+  ],
+  "lost": "$100K"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Oracle Bad Price",
+  "tx_hash": "0x6c19762186c9f32c81eb2a79420fc7ad4485aa916cab37ec278b216757bfba0d",
+  "name": "dForce",
+  "date": "2023-02-10",
+  "sources": [
+   "https://de.fi/blog/?p=12",
+   "https://www.udbx.com/info/193854.html"
+  ],
+  "lost": "$3.65M"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Price Manipulation",
+  "tx_hash": "0x7f325cf1201422cf7ab6dd06d66136c55b399144f21b70f09a0c799782c5c874",
+  "name": "KyberSwap",
+  "date": "2023-11-23",
+  "sources": [
+   "https://github.com/liqtags/crypto-rekts/blob/HEAD/rekts/KyberSwap-Flashloan-Exploit.md"
+  ],
+  "lost": "~$15.7M (Optimism leg)"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Price Manipulation",
+  "tx_hash": "0x8761164b8947a0690b57896a8e7370dd69fe8e9137ce61e0b21ff08581a2ce60",
+  "name": "Cozy Finance",
+  "date": "2026-09-07",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2026-09/CozyFinance_exp.sol"
+  ],
+  "lost": "~$160K"
+ },
+ {
+  "chain": "optimism",
+  "vuln_type": "Reentrancy",
+  "tx_hash": "0xf4fc3b638f1a377cf22b729199a9aeb27fc62fe2983a65c4d14b99ee5c5b2328",
+  "name": "Nebula Revelation",
+  "date": "2024-01-25",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2024-01/NBLGAME_exp.sol",
+   "https://github.com/pcaversaccio/reentrancy-attacks"
+  ],
+  "lost": "$180K"
+ },
+ {
+  "chain": "base",
+  "vuln_type": "Logic Flaw",
+  "tx_hash": "0x5c1febd5047c2a15c37988b6abd5c8b984236dddf6fd24eed96b0f43951ad2c9",
+  "name": "GoldPesa GPXHooks",
+  "date": "2026-10-02",
+  "sources": [
+   "https://www.cryptotimes.io/2026/10/03/goldpesas-gpxhooks-allegedly-drained-for-114k-in-base-exploit/"
+  ],
+  "lost": "$114K"
+ },
+ {
+  "chain": "base",
+  "vuln_type": "Flash Loan Attack",
+  "tx_hash": "0xa618933a0e0ffd0b9f4f0835cc94e523d0941032821692c01aa96cd6f80fc3fd",
+  "name": "Normie",
+  "date": "2024-05-26",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2024-05/NORMIE_exp.sol"
+  ],
+  "lost": "$490K"
+ },
+ {
+  "chain": "base",
+  "vuln_type": "Access Control",
+  "tx_hash": "0xbb837d417b76dd237b4418e1695a50941a69259a1c4dee561ea57d982b9f10ec",
+  "name": "LeetSwap",
+  "date": "2023-08-01",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2023-08/Leetswap_exp.sol"
+  ],
+  "lost": "~$624K"
+ },
+ {
+  "chain": "base",
+  "vuln_type": "Access Control",
+  "tx_hash": "0x5a7462b79d6df0048299c229bdca232ea6dcb97d80cd3b512c28e67db2370d47",
+  "name": "AIXBTForcedSwap",
+  "date": "2025-01-26",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2025-01/AIXBTForcedSwap_exp.sol"
+  ],
+  "lost": "~$13.6K"
+ },
+ {
+  "chain": "base",
+  "vuln_type": "Reentrancy",
+  "tx_hash": "0x8fcdfcded45100437ff94801090355f2f689941dca75de9a702e01670f361c04",
+  "name": "CloberDEX",
+  "date": "2024-12-10",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2024-12/CloberDEX_exp.sol",
+   "https://www.certik.com/resources/blog/clober-dex-incident-analysis"
+  ],
+  "lost": "~$501K"
+ },
+ {
+  "chain": "base",
+  "vuln_type": "Oracle Manipulation",
+  "tx_hash": "0x6b378c84aa57097fb5845f285476e33d6832b8090d36d02fe0e1aed909228edd",
+  "name": "KiloEx",
+  "date": "2025-04-14",
+  "sources": [
+   "https://rekt.news/kiloex-rekt"
+  ],
+  "lost": "~$3.13M"
+ },
+ {
+  "chain": "base",
+  "vuln_type": "Flash Loan Attack",
+  "tx_hash": "0xde903046b5cdf27a5391b771f41e645e9cc670b649f7b87b1524fc4076f45983",
+  "name": "ImpermaxV3",
+  "date": "2025-04-26",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2025-04/ImpermaxV3_exp.sol"
+  ],
+  "lost": "~$300K"
+ },
+ {
+  "chain": "base",
+  "vuln_type": "Price Manipulation",
+  "tx_hash": "0x6ab5b7b51f780e8c6c5ddaf65e9badb868811a95c1fd64e86435283074d3149e",
+  "name": "CompoundFork",
+  "date": "2024-10-26",
+  "sources": [
+   "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2024-10/CompoundFork_exploit.sol"
+  ],
+  "lost": "~$1M"
+ }
+]

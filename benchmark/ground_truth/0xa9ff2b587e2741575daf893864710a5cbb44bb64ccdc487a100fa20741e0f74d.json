@@ -1,0 +1,28 @@
+{
+  "name": "Sentiment",
+  "cause": "Reentrancy",
+  "platform": "Arbitrum",
+  "transaction_hash": [
+    "0xa9ff2b587e2741575daf893864710a5cbb44bb64ccdc487a100fa20741e0f74d"
+  ],
+  "complexity_level": "",
+  "time": "2023-04-04",
+  "lost": "~$1M",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://quillaudits.com/blog/hack-analysis/rodeo-finance-hack']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://quillaudits.com/blog/hack-analysis/rodeo-finance-hack"
+    ]
+  }
+}

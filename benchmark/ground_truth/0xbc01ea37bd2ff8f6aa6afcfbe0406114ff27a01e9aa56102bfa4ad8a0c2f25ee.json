@@ -1,0 +1,28 @@
+{
+  "name": "SKP Token",
+  "cause": "Rug Pull",
+  "platform": "BNBChain",
+  "transaction_hash": [
+    "0xbc01ea37bd2ff8f6aa6afcfbe0406114ff27a01e9aa56102bfa4ad8a0c2f25ee"
+  ],
+  "complexity_level": "",
+  "time": "2026-05-26",
+  "lost": "~$212K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://github.com/SunWeb3Sec/DeFiHackLabs']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://github.com/SunWeb3Sec/DeFiHackLabs"
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "Cozy Finance",
+  "cause": "Price Manipulation",
+  "platform": "Optimism",
+  "transaction_hash": [
+    "0x8761164b8947a0690b57896a8e7370dd69fe8e9137ce61e0b21ff08581a2ce60"
+  ],
+  "complexity_level": "",
+  "time": "2026-09-07",
+  "lost": "~$160K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2026-09/CozyFinance_exp.sol']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2026-09/CozyFinance_exp.sol"
+    ]
+  }
+}

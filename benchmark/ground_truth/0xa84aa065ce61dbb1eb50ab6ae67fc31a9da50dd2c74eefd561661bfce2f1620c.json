@@ -1,0 +1,28 @@
+{
+  "name": "Curve Finance",
+  "cause": "Reentrancy",
+  "platform": "Ethereum",
+  "transaction_hash": [
+    "0xa84aa065ce61dbb1eb50ab6ae67fc31a9da50dd2c74eefd561661bfce2f1620c"
+  ],
+  "complexity_level": "",
+  "time": "2023-07-30",
+  "lost": "~$70M",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://github.com/kismp123/defi-security-incident/blob/HEAD/2023/2023-07-30_Curve_VyperReentrancy_ETH.md']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://github.com/kismp123/defi-security-incident/blob/HEAD/2023/2023-07-30_Curve_VyperReentrancy_ETH.md"
+    ]
+  }
+}

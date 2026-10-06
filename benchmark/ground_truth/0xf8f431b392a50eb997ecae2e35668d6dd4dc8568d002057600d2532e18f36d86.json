@@ -1,0 +1,28 @@
+{
+  "name": "WHALE",
+  "cause": "Deflationary Token Attack",
+  "platform": "BNBChain",
+  "transaction_hash": [
+    "0xf8f431b392a50eb997ecae2e35668d6dd4dc8568d002057600d2532e18f36d86"
+  ],
+  "complexity_level": "",
+  "time": "2026-06",
+  "lost": "~$3,460",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://github.com/sanbir/evm-hack-registry/blob/HEAD/2026-06-WHALE_exp/WHALE_exp.md']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://github.com/sanbir/evm-hack-registry/blob/HEAD/2026-06-WHALE_exp/WHALE_exp.md"
+    ]
+  }
+}

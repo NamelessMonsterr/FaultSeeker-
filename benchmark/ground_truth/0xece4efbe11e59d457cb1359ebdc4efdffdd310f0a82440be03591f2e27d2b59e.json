@@ -1,0 +1,29 @@
+{
+  "name": "DeltaPrime",
+  "cause": "Incorrect Input Validation",
+  "platform": "Avalanche",
+  "transaction_hash": [
+    "0xece4efbe11e59d457cb1359ebdc4efdffdd310f0a82440be03591f2e27d2b59e"
+  ],
+  "complexity_level": "",
+  "time": "2024-11-11",
+  "lost": "~$4.8M total (~$4.1M Avalanche)",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://threesigma.xyz/blog/exploit/deltaprime-defi-exploit-avalanche-arbitrum-hack', 'https://rekt.news/deltaprime-rekt2']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://threesigma.xyz/blog/exploit/deltaprime-defi-exploit-avalanche-arbitrum-hack",
+      "https://rekt.news/deltaprime-rekt2"
+    ]
+  }
+}

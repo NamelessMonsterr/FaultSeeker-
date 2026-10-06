@@ -1,0 +1,28 @@
+{
+  "name": "KyberSwap",
+  "cause": "Price Manipulation",
+  "platform": "Optimism",
+  "transaction_hash": [
+    "0x7f325cf1201422cf7ab6dd06d66136c55b399144f21b70f09a0c799782c5c874"
+  ],
+  "complexity_level": "",
+  "time": "2023-11-23",
+  "lost": "~$15.7M (Optimism leg)",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://github.com/liqtags/crypto-rekts/blob/HEAD/rekts/KyberSwap-Flashloan-Exploit.md']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://github.com/liqtags/crypto-rekts/blob/HEAD/rekts/KyberSwap-Flashloan-Exploit.md"
+    ]
+  }
+}

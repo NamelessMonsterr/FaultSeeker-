@@ -1,0 +1,29 @@
+{
+  "name": "Balancer",
+  "cause": "Precision Loss",
+  "platform": "Arbitrum",
+  "transaction_hash": [
+    "0xe4dfc8b8b54eb7e101d59cd9f87f389186b2e8f6e188557ae9dfdbea2b12e703"
+  ],
+  "complexity_level": "",
+  "time": "2025-11-03",
+  "lost": "~$1.7M (462 ETH Arbitrum leg)",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://rekt.news/balancer-rekt2', 'https://www.quillaudits.com/blog/hack-analysis/the-balancer-hack']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://rekt.news/balancer-rekt2",
+      "https://www.quillaudits.com/blog/hack-analysis/the-balancer-hack"
+    ]
+  }
+}
