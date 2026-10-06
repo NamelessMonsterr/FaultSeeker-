@@ -1,0 +1,25 @@
+{
+  "txn_hash": "0xcc71a3bb131c73462b0f25533070113a63c85e942a22e18bc945eec184eb5799",
+  "chain": "bsc",
+  "vuln_type": "Price Manipulation",
+  "protocol": "BeatXswap",
+  "incident_date": "2026-09-11",
+  "sources": "DeTracker/SlowMist https://feed.detracker.xyz/news/747-beatxswap-reported-a-loss-of-approximately-77-512-worth-of-btx-due-to-a-vulnerab; DeFiHackLabs src/test/2026-09/BeatXswap_exp.sol",
+  "added": "audit-fixes round2 (2026-10-06): replacement for nibble-detector-patterned row",
+  "verification": {
+    "hash_format_valid": true,
+    "not_patterned_nibble_detector": true,
+    "not_duplicate_in_benchmark": true,
+    "source_documented": true,
+    "onchain_resolvable": false,
+    "onchain_note": "not independently RPC-verified; sourced from documented incident (DeFiHackLabs PoC / security-team alert)"
+  },
+  "trace_derived": {
+    "functioncall_count": null,
+    "address_count": null,
+    "max_depth": null,
+    "gas_cost": null,
+    "class": null,
+    "note": "left empty: no trace bundle available; not fabricated"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "txn_hash": "0xed62bb27bd1058d3d7cc93d55421d6d0001ced8cb4529b02773f5126a4edb08b",
+  "chain": "base",
+  "vuln_type": "Logic Flaw",
+  "protocol": "Internet Token (INT)",
+  "incident_date": "2026-09-21",
+  "sources": "rektradar.xyz; DeFiHackLabs src/test/2026-09/InternetToken_exp.sol",
+  "added": "audit-fixes round2 (2026-10-06): replacement for nibble-detector-patterned row",
+  "verification": {
+    "hash_format_valid": true,
+    "not_patterned_nibble_detector": true,
+    "not_duplicate_in_benchmark": true,
+    "source_documented": true,
+    "onchain_resolvable": false,
+    "onchain_note": "not independently RPC-verified; sourced from documented incident (DeFiHackLabs PoC / security-team alert)"
+  },
+  "trace_derived": {
+    "functioncall_count": null,
+    "address_count": null,
+    "max_depth": null,
+    "gas_cost": null,
+    "class": null,
+    "note": "left empty: no trace bundle available; not fabricated"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "txn_hash": "0xec1b969e1435a1449dd5179404c54b5c60e49f15a1bf6bf8922e8d2978102f4a",
+  "chain": "bsc",
+  "vuln_type": "Lack Of Access Control",
+  "protocol": "FPR (staking contracts)",
+  "incident_date": "2022-12-14",
+  "sources": "DeFiHackLabs src/test/2022-12/FPR_exp.sol (@KeyInfo); PeckShield https://twitter.com/peckshield/status/1603226968706936832",
+  "added": "audit-fixes round2 (2026-10-06): replacement for nibble-detector-patterned row",
+  "verification": {
+    "hash_format_valid": true,
+    "not_patterned_nibble_detector": true,
+    "not_duplicate_in_benchmark": true,
+    "source_documented": true,
+    "onchain_resolvable": false,
+    "onchain_note": "not independently RPC-verified; sourced from documented incident (DeFiHackLabs PoC / security-team alert)"
+  },
+  "trace_derived": {
+    "functioncall_count": null,
+    "address_count": null,
+    "max_depth": null,
+    "gas_cost": null,
+    "class": null,
+    "note": "left empty: no trace bundle available; not fabricated"
+  }
+}

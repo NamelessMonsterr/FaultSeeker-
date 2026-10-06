@@ -1,0 +1,25 @@
+{
+  "txn_hash": "0xcca7ea9d48e00e7e32e5d005b57ec3cac28bc3ad0181e4ca208832e62aa52efe",
+  "chain": "bsc",
+  "vuln_type": "Lack Of Access Control",
+  "protocol": "BabySwap",
+  "incident_date": "2022-10-01",
+  "sources": "DeFiHackLabs src/test/2022-10/BabySwap_exp.sol (@KeyInfo); BlockSec https://twitter.com/BlockSecTeam/status/1576441612812836865",
+  "added": "audit-fixes round2 (2026-10-06): replacement for nibble-detector-patterned row",
+  "verification": {
+    "hash_format_valid": true,
+    "not_patterned_nibble_detector": true,
+    "not_duplicate_in_benchmark": true,
+    "source_documented": true,
+    "onchain_resolvable": false,
+    "onchain_note": "not independently RPC-verified; sourced from documented incident (DeFiHackLabs PoC / security-team alert)"
+  },
+  "trace_derived": {
+    "functioncall_count": null,
+    "address_count": null,
+    "max_depth": null,
+    "gas_cost": null,
+    "class": null,
+    "note": "left empty: no trace bundle available; not fabricated"
+  }
+}

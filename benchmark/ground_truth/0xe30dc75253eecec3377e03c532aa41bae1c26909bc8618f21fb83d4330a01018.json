@@ -1,0 +1,25 @@
+{
+  "txn_hash": "0xe30dc75253eecec3377e03c532aa41bae1c26909bc8618f21fb83d4330a01018",
+  "chain": "bsc",
+  "vuln_type": "Lack Of Access Control",
+  "protocol": "ShadowFi (SDF)",
+  "incident_date": "2022-09-02",
+  "sources": "DeFiHackLabs past/2022 README \"20220902 ShadowFi - Access Control\"; PeckShield alert https://twitter.com/PeckShieldAlert/status/1565549688509861888",
+  "added": "audit-fixes round2 (2026-10-06): replacement for nibble-detector-patterned row",
+  "verification": {
+    "hash_format_valid": true,
+    "not_patterned_nibble_detector": true,
+    "not_duplicate_in_benchmark": true,
+    "source_documented": true,
+    "onchain_resolvable": false,
+    "onchain_note": "not independently RPC-verified; sourced from documented incident (DeFiHackLabs PoC / security-team alert)"
+  },
+  "trace_derived": {
+    "functioncall_count": null,
+    "address_count": null,
+    "max_depth": null,
+    "gas_cost": null,
+    "class": null,
+    "note": "left empty: no trace bundle available; not fabricated"
+  }
+}

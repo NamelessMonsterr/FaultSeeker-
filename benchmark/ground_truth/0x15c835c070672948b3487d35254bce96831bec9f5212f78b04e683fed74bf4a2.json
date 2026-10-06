@@ -1,0 +1,25 @@
+{
+  "txn_hash": "0x15c835c070672948b3487d35254bce96831bec9f5212f78b04e683fed74bf4a2",
+  "chain": "bsc",
+  "vuln_type": "Logic Flaw",
+  "protocol": "LegendaryMoneyMonNft",
+  "incident_date": "2026-05-28",
+  "sources": "SlowMist https://x.com/SlowMist_Team/status/2060205558687486441; DeFiHackLabs src/test/2026-05/LegendaryMoneyMonNft_exp.sol",
+  "added": "audit-fixes round2 (2026-10-06): replacement for nibble-detector-patterned row",
+  "verification": {
+    "hash_format_valid": true,
+    "not_patterned_nibble_detector": true,
+    "not_duplicate_in_benchmark": true,
+    "source_documented": true,
+    "onchain_resolvable": false,
+    "onchain_note": "not independently RPC-verified; sourced from documented incident (DeFiHackLabs PoC / security-team alert)"
+  },
+  "trace_derived": {
+    "functioncall_count": null,
+    "address_count": null,
+    "max_depth": null,
+    "gas_cost": null,
+    "class": null,
+    "note": "left empty: no trace bundle available; not fabricated"
+  }
+}
