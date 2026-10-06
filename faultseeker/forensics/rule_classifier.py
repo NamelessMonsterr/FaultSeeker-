@@ -42,7 +42,6 @@ def classify(signals: SignalBundle) -> tuple[str, float, str, str]:
     Returns (verdict, confidence, matched_rule, vuln_type_hint).
 
     Rule priority (highest confidence first):
-     0. No contract execution → BENIGN (skip Stage 2)
      1. Reentrancy + profit
      2. Flash Loan + profit
      3. Flash Loan + price manipulation
@@ -53,17 +52,16 @@ def classify(signals: SignalBundle) -> tuple[str, float, str, str]:
      7. Generic delegatecall into tx-created contract
      8. Generic access control bypass
      9. Reentrancy pattern alone
+     0. No contract execution → BENIGN (skip Stage 2). Round2: evaluated
+        AFTER all EXPLOIT rules so it can never override an explicit
+        exploit flag; requires the hardened positive-evidence signal.
     10. Weak flash-loan signal
     11. No signals → UNCERTAIN
     12. Ambiguous → UNCERTAIN
     """
 
-    # ── Rule 0: No contract code executed → BENIGN ──────────────────────────
-    # Positive benign evidence (set by SignalExtractor._check_no_contract_execution):
-    # pure native-currency transfer(s); a contract exploit is impossible.
-    if signals.no_contract_execution:
-        return ('BENIGN', 0.90, 'no_contract_execution',
-                VULN_TYPE_MAP['no_signals'])
+    # ── Rules 1-9 first: explicit EXPLOIT signals take precedence ──────────
+    # (Round2: Rule 0/BENIGN moved below so it cannot override these.)
 
     # ── Rule 1: Reentrancy + confirmed profit ─────────────────────────────────
     if signals.reentrancy_score >= 0.85 and signals.profit_extraction_eth > 0.5:
@@ -117,6 +115,17 @@ def classify(signals: SignalBundle) -> tuple[str, float, str, str]:
     if signals.reentrancy_score >= signals.reentrancy_detection_threshold:
         return ('EXPLOIT', 0.75, 'reentrancy_pattern',
                 VULN_TYPE_MAP['reentrancy_pattern'])
+
+    # ── Rule 0: No contract code executed → BENIGN ──────────────────────────
+    # Round2: evaluated AFTER every EXPLOIT rule, so an explicit exploit flag
+    # can never be overridden by BENIGN. The signal itself
+    # (SignalExtractor._check_no_contract_execution) now requires positive
+    # evidence: well-formed value-transfer frames, no raw calldata, no
+    # storage writes. Malformed/empty/undecodable traces leave it False and
+    # fall through to UNCERTAIN below.
+    if signals.no_contract_execution:
+        return ('BENIGN', 0.90, 'no_contract_execution',
+                VULN_TYPE_MAP['no_signals'])
 
     # ── Rule 10: Weak flash-loan signal only (need LLM to confirm) ─────────────
     if signals.flash_loan_detected and signals.flash_callback_detected:

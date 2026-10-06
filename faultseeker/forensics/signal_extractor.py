@@ -789,26 +789,43 @@ class SignalExtractor:
 
     def _check_no_contract_execution(self) -> None:
         """
-        Positive benign evidence: the trace shows no contract code execution at
-        all (pure native-currency value transfers). A smart-contract exploit
-        cannot exist in such a transaction, so the RuleClassifier may emit
-        BENIGN and the pipeline may skip Stage 2 entirely.
+        Positive benign evidence: the trace shows a well-formed sequence of
+        plain native-currency value transfers and nothing else.
 
-        Conservative by design: any named function, any calldata params, any
-        non-CALL frame (DELEGATECALL/STATICCALL/CREATE/…), or any SSTORE event
-        disqualifies. Empty/missing traces leave the flag False (unknown).
+        Round2 hardening (independent review found unsafe BENIGN verdicts):
+          * Requires POSITIVE evidence: a non-empty flat trace whose every
+            frame is a well-formed, decodable call descriptor. An empty dict
+            frame ([{}]), a non-dict frame, or a frame with no recognizable
+            call fields is NOT evidence of anything -> flag stays False and
+            the classifier falls through to UNCERTAIN.
+          * Raw input/calldata on any frame -> abort. A blank CALL carrying
+            input 0xdeadbeef is never auto-benign ("raw input present = never
+            auto-benign").
+          * Any named function, any params, any non-CALL frame, or any storage
+            event -> abort, as before.
+          * Empty/missing traces leave the flag False (unknown).
         """
+        # Well-formed frame fields we can positively decode. A frame carrying
+        # none of these (e.g. {}) tells us nothing about execution.
+        _CALL_FIELDS = ('function', 'params', 'input', 'call_type', 'type',
+                        'to', 'address', 'value')
         flat = self.flat or []
         if not flat:
             return
         for frame in flat:
             if not isinstance(frame, dict):
-                continue
+                return  # malformed: not positive evidence
+            if not any(k in frame for k in _CALL_FIELDS):
+                return  # undecodable frame ([{}]): not positive evidence
             fn = (frame.get('function') or '').strip()
             params = (frame.get('params') or '').strip()
-            ctype = (frame.get('call_type') or 'call').strip().lower()
+            raw_input = (frame.get('input') or '').strip().lower()
+            ctype = (frame.get('call_type') or frame.get('type')
+                     or 'call').strip().lower()
             if fn or params:
                 return  # contract function invoked
+            if raw_input and raw_input != '0x':
+                return  # raw calldata present: never auto-benign
             if ctype != 'call':
                 return  # DELEGATECALL / STATICCALL / CREATE / …
         if self.storage_events:
