@@ -30,12 +30,43 @@ def test_benign_rule_fires_on_no_contract_execution():
     assert conf >= 0.85
 
 
-def test_benign_takes_priority_over_exploit_rules():
-    # Positive benign evidence wins even if (inconsistently) other flags set.
-    verdict, _, _, _ = rule_classifier.classify(
+def test_exploit_rules_take_priority_over_benign():
+    # Round2: Rule 0/BENIGN moved AFTER all EXPLOIT rules — an explicit
+    # exploit flag can never be overridden by BENIGN.
+    verdict, _, rule, _ = rule_classifier.classify(
         _bundle(no_contract_execution=True, reentrancy_score=0.9,
                 profit_extraction_eth=1.0))
-    assert verdict == 'BENIGN'
+    assert verdict == 'EXPLOIT'
+    assert rule == 'reentrancy_with_profit'
+
+
+# ── Round2: BENIGN positive-evidence hardening ───────────────────────────
+
+def test_no_contract_execution_rejects_malformed_frames():
+    se = _extractor_with_flat([None, 'not-a-dict', 42])
+    se._check_no_contract_execution()
+    assert se.signals.no_contract_execution is False
+
+
+def test_no_contract_execution_rejects_empty_dict_frame():
+    se = _extractor_with_flat([{}])
+    se._check_no_contract_execution()
+    assert se.signals.no_contract_execution is False
+
+
+def test_no_contract_execution_rejects_raw_input():
+    # Blank CALL carrying raw calldata is never auto-benign.
+    se = _extractor_with_flat(
+        [{'call_type': 'call', 'to': '0x' + 'ab' * 20, 'input': '0xdeadbeef'}])
+    se._check_no_contract_execution()
+    assert se.signals.no_contract_execution is False
+
+
+def test_no_contract_execution_rejects_undecodable_frame():
+    # Frame with none of the recognized call fields: not positive evidence.
+    se = _extractor_with_flat([{'weird': 'blob'}])
+    se._check_no_contract_execution()
+    assert se.signals.no_contract_execution is False
 
 
 def test_empty_bundle_still_uncertain():
@@ -134,6 +165,57 @@ def test_escalate_agent_rebuilds_on_cloud():
     assert escalated.model == r.cloud_model
     assert escalated.agent_role == 'generation_agent'
     assert getattr(escalated, 'escalated_from_local', False) is True
+
+
+# ── Round2: theta_gate hardening ──────────────────────────────────────────
+
+def test_tier2_confidence_rejects_valid_but_wrong_json():
+    from faultseeker.function_analysis.function_analyzer import FunctionAnalyzer
+    conf = FunctionAnalyzer._tier2_confidence
+    # correct shape passes
+    assert conf({'task_selected': '1', 'task_description': 'do x'},
+                expect_keys=('task_selected', 'task_description')) == 1.0
+    # valid-but-wrong JSON fails schema sanity
+    assert conf({'foo': 'bar'},
+                expect_keys=('task_selected', 'task_description')) == 0.0
+    # missing value fails
+    assert conf({'task_selected': '1', 'task_description': None},
+                expect_keys=('task_selected', 'task_description')) == 0.0
+    # no expect_keys: legacy non-empty-dict check
+    assert conf({'anything': 1}) == 1.0
+    assert conf({}) == 0.0
+
+
+def test_escalate_agent_preserves_memory():
+    from faultseeker.core.llm_router import build_routed_agent
+    r = _router()
+    agent = build_routed_agent("sys", router=r, agent_role='generation_agent',
+                               system_prompt='You are a tester')
+    agent.memory.append({'role': 'user', 'content': 'original prompt'})
+    agent.memory.append({'role': 'assistant', 'content': 'bad json {'})
+    escalated = r.escalate_agent(agent)
+    contents = [m.get('content') for m in escalated.memory]
+    assert 'original prompt' in contents
+    assert 'bad json {' in contents
+    # mutating the copy must not affect the original
+    escalated.memory.append({'role': 'user', 'content': 'retry'})
+    assert len(agent.memory) == 3
+
+
+def test_query_tier2_skips_escalation_in_cloud_first():
+    from faultseeker.core.llm_router import HybridLLMRouter, build_routed_agent
+    from faultseeker.function_analysis.function_analyzer import FunctionAnalyzer
+    r = HybridLLMRouter(routing_strategy='cloud-first')
+    agent = build_routed_agent("sys", router=r, agent_role='generation_agent',
+                               system_prompt='t')
+    calls = []
+    agent.query = lambda prompt, format='json': calls.append(prompt) or {}
+    fa = FunctionAnalyzer.__new__(FunctionAnalyzer)
+    fa.router = r
+    fa._query_tier2(agent, 'p', expect_keys=('task_selected',))
+    # single cloud query, no escalation rebuild
+    assert calls == ['p']
+    assert getattr(agent, 'escalated_from_local', False) is False
 
 
 # ── SLOAD extraction ────────────────────────────────────────────────────────

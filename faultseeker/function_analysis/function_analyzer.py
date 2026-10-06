@@ -69,29 +69,57 @@ class FunctionAnalyzer:
         return self.cost_tracker.stage(name)
 
     @staticmethod
-    def _tier2_confidence(response, format='json') -> float:
+    def _tier2_confidence(response, format='json', expect_keys=None) -> float:
         """Operational local-confidence signal for θ_gate escalation (audit-fixes).
 
         Local models report no numeric confidence, so confidence is measured
         as response validity: 1.0 for a well-formed response, 0.0 otherwise.
+
+        Round2: ``expect_keys`` adds a schema/content sanity check. A non-empty
+        dict with the wrong shape (valid-but-wrong JSON, e.g. {"foo": "bar"}
+        where {"task_selected": ...} was requested) scores 0.0 and triggers
+        escalation instead of passing silently.
         """
         if format == 'str':
             return 1.0 if isinstance(response, str) and response.strip() else 0.0
-        return 1.0 if isinstance(response, dict) and response else 0.0
+        if not isinstance(response, dict) or not response:
+            return 0.0
+        if expect_keys:
+            for key in expect_keys:
+                if key not in response or response[key] is None:
+                    return 0.0
+        return 1.0
 
-    def _query_tier2(self, agent, prompt, format='json'):
+    def _query_tier2(self, agent, prompt, format='json', expect_keys=None):
         """Query a Tier-2 agent with θ_gate escalation (audit-fixes).
 
         Queries the local agent first; if the response is invalid, its
         confidence (0.0) falls below the router's ``confidence_gate`` and the
         agent is rebuilt on the cloud model for a single retry. Without a
         router attached this is a plain query.
+
+        Round2 guards:
+          * ``expect_keys``: optional schema sanity — valid-but-wrong JSON
+            does not pass.
+          * cloud-only / cloud-first routing strategies: the agent is already
+            on cloud, so local-first + escalation is skipped (single query).
+          * Already-escalated agents are never re-escalated.
+          * The retry preserves the local agent's conversation memory
+            (see HybridLLMRouter.escalate_agent).
         """
-        response = agent.query(prompt, format=format)
         router = getattr(agent, 'router', None) or self.router
-        if router is not None and router.should_escalate(
-                getattr(agent, 'agent_role', ''),
-                local_confidence=self._tier2_confidence(response, format)):
+        if router is not None and getattr(router, 'routing_strategy', '') in (
+                'cloud-only', 'cloud-first'):
+            # Already a cloud query under these strategies; escalation would
+            # just rebuild an identical cloud agent.
+            return agent.query(prompt, format=format)
+        response = agent.query(prompt, format=format)
+        if (router is not None
+                and not getattr(agent, 'escalated_from_local', False)
+                and router.should_escalate(
+                    getattr(agent, 'agent_role', ''),
+                    local_confidence=self._tier2_confidence(
+                        response, format, expect_keys))):
             try:
                 escalated = router.escalate_agent(agent)
                 logging.info("Tier-2 θ_gate escalation: retrying '%s' on cloud model",
@@ -315,7 +343,11 @@ class FunctionAnalyzer:
             function_call_info_summary = self.function_call_info_summary,
             current_understanding = self.understanding_result
         )
-        self.current_task = self._query_tier2(self.generation_agent, task_selection_prompt)
+        self.current_task = self._query_tier2(
+            self.generation_agent, task_selection_prompt,
+            # Round2: schema sanity — the prompt demands task_selected /
+            # task_description keys; valid-but-wrong JSON must not pass.
+            expect_keys=('task_selected', 'task_description'))
         count = 0
         while (not isinstance(self.current_task, dict)) and (count < 3):
             self.current_task = self._query_tier2(self.generation_agent, 'The task is not in standard JSON format. Please reformat the task into a standard JSON format.')

@@ -218,6 +218,10 @@ class HybridLLMRouter:
         Rebuild an agent created by :func:`build_routed_agent` with the cloud
         model, preserving its system prompt and role. Used for Tier 2 θ_gate
         escalation retries.
+
+        Round2: the local agent's conversation memory is deep-copied into the
+        new cloud agent, so the retry preserves context (including the failed
+        local attempt). Without this the retry ran blind.
         """
         from faultseeker.utils.agent import build_provider_agent
         role = getattr(agent, 'agent_role', '')
@@ -228,6 +232,13 @@ class HybridLLMRouter:
             except Exception:
                 system_prompt = ''
         new_agent = build_provider_agent(system_prompt, self.cloud_model)
+        try:
+            mem = getattr(agent, 'memory', None)
+            if isinstance(mem, list) and mem:
+                import copy
+                new_agent.memory = copy.deepcopy(mem)
+        except Exception:
+            pass  # context preservation is best-effort; retry still valid
         setattr(new_agent, 'router', self)
         setattr(new_agent, 'agent_role', role)
         setattr(new_agent, 'escalated_from_local', True)
