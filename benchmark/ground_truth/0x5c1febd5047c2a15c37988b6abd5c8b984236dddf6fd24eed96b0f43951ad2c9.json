@@ -1,0 +1,28 @@
+{
+  "name": "GoldPesa GPXHooks",
+  "cause": "Logic Flaw",
+  "platform": "Base",
+  "transaction_hash": [
+    "0x5c1febd5047c2a15c37988b6abd5c8b984236dddf6fd24eed96b0f43951ad2c9"
+  ],
+  "complexity_level": "",
+  "time": "2026-10-02",
+  "lost": "$114K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://www.cryptotimes.io/2026/10/03/goldpesas-gpxhooks-allegedly-drained-for-114k-in-base-exploit/']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://www.cryptotimes.io/2026/10/03/goldpesas-gpxhooks-allegedly-drained-for-114k-in-base-exploit/"
+    ]
+  }
+}

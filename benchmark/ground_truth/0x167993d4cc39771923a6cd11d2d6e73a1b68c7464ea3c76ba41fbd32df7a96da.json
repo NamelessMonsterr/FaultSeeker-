@@ -1,0 +1,29 @@
+{
+  "name": "Balancer",
+  "cause": "Arithmetic Issues",
+  "platform": "Polygon",
+  "transaction_hash": [
+    "0x167993d4cc39771923a6cd11d2d6e73a1b68c7464ea3c76ba41fbd32df7a96da"
+  ],
+  "complexity_level": "",
+  "time": "2025-11-03",
+  "lost": "~$390K (Polygon leg)",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://rekt.news/balancer-rekt2', 'https://www.quillaudits.com/blog/hack-analysis/the-balancer-hack']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://rekt.news/balancer-rekt2",
+      "https://www.quillaudits.com/blog/hack-analysis/the-balancer-hack"
+    ]
+  }
+}

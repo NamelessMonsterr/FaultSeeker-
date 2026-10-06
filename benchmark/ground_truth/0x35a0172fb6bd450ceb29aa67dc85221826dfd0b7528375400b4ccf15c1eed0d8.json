@@ -1,0 +1,28 @@
+{
+  "name": "Venus",
+  "cause": "Donation Attack",
+  "platform": "zkSync Era",
+  "transaction_hash": [
+    "0x35a0172fb6bd450ceb29aa67dc85221826dfd0b7528375400b4ccf15c1eed0d8"
+  ],
+  "complexity_level": "",
+  "time": "2025-02-27",
+  "lost": "$716K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://olympixai.medium.com/filament-webkey-venus-drained-for-2m-price-oracles-fixed-params-and-flash-loans-abused-56a4e67f8208']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": true,
+    "onchain_check_method": "eth_getTransactionByHash @ https://mainnet.era.zksync.io",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://olympixai.medium.com/filament-webkey-venus-drained-for-2m-price-oracles-fixed-params-and-flash-loans-abused-56a4e67f8208"
+    ]
+  }
+}

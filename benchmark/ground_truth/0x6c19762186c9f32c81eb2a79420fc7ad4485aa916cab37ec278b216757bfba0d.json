@@ -1,0 +1,29 @@
+{
+  "name": "dForce",
+  "cause": "Oracle Bad Price",
+  "platform": "Optimism",
+  "transaction_hash": [
+    "0x6c19762186c9f32c81eb2a79420fc7ad4485aa916cab37ec278b216757bfba0d"
+  ],
+  "complexity_level": "",
+  "time": "2023-02-10",
+  "lost": "$3.65M",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://de.fi/blog/?p=12', 'https://www.udbx.com/info/193854.html']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://de.fi/blog/?p=12",
+      "https://www.udbx.com/info/193854.html"
+    ]
+  }
+}

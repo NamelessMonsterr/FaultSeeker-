@@ -1,0 +1,29 @@
+{
+  "name": "NereusFinance",
+  "cause": "Price Manipulation",
+  "platform": "Avalanche",
+  "transaction_hash": [
+    "0x0ab12913f9232b27b0664cd2d50e482ad6aa896aeb811b53081712f42d54c026"
+  ],
+  "complexity_level": "",
+  "time": "2022-09-06",
+  "lost": "~$371K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://www.certik.com/blog/cauldron-flashloan-attack', 'https://github.com/farazsth98/real-world-ethereum-hacks-remastered/blob/HEAD/contracts/NereusFlashLoanAttack/NereusFlashLoanAttack.md']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://www.certik.com/blog/cauldron-flashloan-attack",
+      "https://github.com/farazsth98/real-world-ethereum-hacks-remastered/blob/HEAD/contracts/NereusFlashLoanAttack/NereusFlashLoanAttack.md"
+    ]
+  }
+}

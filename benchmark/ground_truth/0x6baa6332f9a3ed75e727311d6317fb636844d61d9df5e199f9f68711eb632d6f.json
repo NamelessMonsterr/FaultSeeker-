@@ -1,0 +1,28 @@
+{
+  "name": "Pike Finance",
+  "cause": "Access Control",
+  "platform": "Optimism",
+  "transaction_hash": [
+    "0x6baa6332f9a3ed75e727311d6317fb636844d61d9df5e199f9f68711eb632d6f"
+  ],
+  "complexity_level": "",
+  "time": "2024-04-30",
+  "lost": "~$1.68M",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://www.certik.com/blog/pike-finance-incident-analysis']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://www.certik.com/blog/pike-finance-incident-analysis"
+    ]
+  }
+}

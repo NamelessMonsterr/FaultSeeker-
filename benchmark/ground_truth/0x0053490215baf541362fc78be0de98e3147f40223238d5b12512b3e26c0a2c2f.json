@@ -1,0 +1,29 @@
+{
+  "name": "MidasCapital",
+  "cause": "Reentrancy",
+  "platform": "Polygon",
+  "transaction_hash": [
+    "0x0053490215baf541362fc78be0de98e3147f40223238d5b12512b3e26c0a2c2f"
+  ],
+  "complexity_level": "",
+  "time": "2023-01-16",
+  "lost": "~$660K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://udbx.com', 'https://github.com/nethermindeth/forta-agents']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://udbx.com",
+      "https://github.com/nethermindeth/forta-agents"
+    ]
+  }
+}

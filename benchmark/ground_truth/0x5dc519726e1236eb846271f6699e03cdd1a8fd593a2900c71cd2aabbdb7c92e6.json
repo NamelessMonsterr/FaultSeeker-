@@ -1,0 +1,28 @@
+{
+  "name": "Quixotic",
+  "cause": "Incorrect Access Control",
+  "platform": "Optimism",
+  "transaction_hash": [
+    "0x5dc519726e1236eb846271f6699e03cdd1a8fd593a2900c71cd2aabbdb7c92e6"
+  ],
+  "complexity_level": "",
+  "time": "2022-07-01",
+  "lost": "$100K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2022-07/Quixotic_exp.sol']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2022-07/Quixotic_exp.sol"
+    ]
+  }
+}

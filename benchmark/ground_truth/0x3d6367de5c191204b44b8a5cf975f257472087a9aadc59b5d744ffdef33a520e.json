@@ -1,0 +1,29 @@
+{
+  "name": "Exactly Protocol",
+  "cause": "Insufficient Validation",
+  "platform": "Optimism",
+  "transaction_hash": [
+    "0x3d6367de5c191204b44b8a5cf975f257472087a9aadc59b5d744ffdef33a520e"
+  ],
+  "complexity_level": "",
+  "time": "2023-08-18",
+  "lost": "$7.2M",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://olympixai.medium.com/exactlys-7-3m-exploit-shows-what-happens-when-contracts-assume-too-much-93289aaeccf3', 'https://github.com/1712n/dn-institute/blob/HEAD/content/research/cyberattacks/incidents/2023-08-18-Exactly%20Protocol.md']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://olympixai.medium.com/exactlys-7-3m-exploit-shows-what-happens-when-contracts-assume-too-much-93289aaeccf3",
+      "https://github.com/1712n/dn-institute/blob/HEAD/content/research/cyberattacks/incidents/2023-08-18-Exactly%20Protocol.md"
+    ]
+  }
+}

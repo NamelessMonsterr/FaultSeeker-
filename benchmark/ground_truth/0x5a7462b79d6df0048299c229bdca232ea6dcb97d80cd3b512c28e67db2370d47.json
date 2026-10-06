@@ -1,0 +1,28 @@
+{
+  "name": "AIXBTForcedSwap",
+  "cause": "Access Control",
+  "platform": "Base",
+  "transaction_hash": [
+    "0x5a7462b79d6df0048299c229bdca232ea6dcb97d80cd3b512c28e67db2370d47"
+  ],
+  "complexity_level": "",
+  "time": "2025-01-26",
+  "lost": "~$13.6K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2025-01/AIXBTForcedSwap_exp.sol']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2025-01/AIXBTForcedSwap_exp.sol"
+    ]
+  }
+}

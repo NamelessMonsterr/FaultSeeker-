@@ -1,0 +1,29 @@
+{
+  "name": "SafeMoon",
+  "cause": "Reflection Token",
+  "platform": "BNBChain",
+  "transaction_hash": [
+    "0x48e52a12cb297354a2a1c54cbc897cf3772328e7e71f51c9889bb8c5e533a934"
+  ],
+  "complexity_level": "",
+  "time": "2023-03-28",
+  "lost": "~$8.9M",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://www.cointime.ai/@QuillAudits/decoding-safemoon-protocols-89-million-exploit-quillaudits-14345', 'https://github.com/1712n/dn-institute/blob/HEAD/content/research/cyberattacks/incidents/2023-03-28-Safemoon.md']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://www.cointime.ai/@QuillAudits/decoding-safemoon-protocols-89-million-exploit-quillaudits-14345",
+      "https://github.com/1712n/dn-institute/blob/HEAD/content/research/cyberattacks/incidents/2023-03-28-Safemoon.md"
+    ]
+  }
+}

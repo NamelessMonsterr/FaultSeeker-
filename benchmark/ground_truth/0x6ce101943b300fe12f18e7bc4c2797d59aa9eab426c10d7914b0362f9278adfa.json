@@ -1,0 +1,29 @@
+{
+  "name": "Merlin DEX",
+  "cause": "Access Control",
+  "platform": "zkSync Era",
+  "transaction_hash": [
+    "0x6ce101943b300fe12f18e7bc4c2797d59aa9eab426c10d7914b0362f9278adfa"
+  ],
+  "complexity_level": "",
+  "time": "2023-04-25",
+  "lost": "~$1.82M",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://github.com/NanoJS10/merlin-dex-forensic-investigation', 'https://rekt.news/merlin-dex-rekt']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": true,
+    "onchain_check_method": "eth_getTransactionByHash @ https://mainnet.era.zksync.io",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://github.com/NanoJS10/merlin-dex-forensic-investigation",
+      "https://rekt.news/merlin-dex-rekt"
+    ]
+  }
+}

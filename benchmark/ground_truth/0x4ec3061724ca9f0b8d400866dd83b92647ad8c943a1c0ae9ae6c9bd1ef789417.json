@@ -1,0 +1,29 @@
+{
+  "name": "MOBOX",
+  "cause": "Business Logic Flaw",
+  "platform": "Optimism",
+  "transaction_hash": [
+    "0x4ec3061724ca9f0b8d400866dd83b92647ad8c943a1c0ae9ae6c9bd1ef789417"
+  ],
+  "complexity_level": "",
+  "time": "2024-03-14",
+  "lost": "~$750K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://www.chaincatcher.com/en/article/2117891', 'https://blog.verichains.io/p/mo-dual-weaknesses-in-a-single-function']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://www.chaincatcher.com/en/article/2117891",
+      "https://blog.verichains.io/p/mo-dual-weaknesses-in-a-single-function"
+    ]
+  }
+}

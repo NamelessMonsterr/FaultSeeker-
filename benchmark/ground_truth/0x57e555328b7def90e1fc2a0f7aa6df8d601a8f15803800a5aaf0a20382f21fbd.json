@@ -1,0 +1,29 @@
+{
+  "name": "WooFi",
+  "cause": "Price Manipulation",
+  "platform": "Arbitrum",
+  "transaction_hash": [
+    "0x57e555328b7def90e1fc2a0f7aa6df8d601a8f15803800a5aaf0a20382f21fbd"
+  ],
+  "complexity_level": "",
+  "time": "2024-03-05",
+  "lost": "~$8.75M",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://github.com/1712n/dn-institute', 'https://github.com/kismp123/defi-security-incident']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://github.com/1712n/dn-institute",
+      "https://github.com/kismp123/defi-security-incident"
+    ]
+  }
+}

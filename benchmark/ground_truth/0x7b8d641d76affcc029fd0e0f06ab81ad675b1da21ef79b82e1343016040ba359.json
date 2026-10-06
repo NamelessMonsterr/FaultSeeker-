@@ -1,0 +1,29 @@
+{
+  "name": "HumaFinance",
+  "cause": "Business Logic Flaw",
+  "platform": "Polygon",
+  "transaction_hash": [
+    "0x7b8d641d76affcc029fd0e0f06ab81ad675b1da21ef79b82e1343016040ba359"
+  ],
+  "complexity_level": "",
+  "time": "2026-05-11",
+  "lost": "~$101.4K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://github.com/SunWeb3Sec/DeFiHackLabs/pull/1089', 'https://github.com/sanbir/evm-hack-registry/blob/HEAD/2026-05-HumaCreditApprovalBypass_exp/HumaCreditApprovalBypass_exp.md']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://github.com/SunWeb3Sec/DeFiHackLabs/pull/1089",
+      "https://github.com/sanbir/evm-hack-registry/blob/HEAD/2026-05-HumaCreditApprovalBypass_exp/HumaCreditApprovalBypass_exp.md"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "StarsArena",
+  "cause": "Reentrancy",
+  "platform": "Avalanche",
+  "transaction_hash": [
+    "0x4f37ffecdad598f53b8d5a2d9df98e3c00fbda4328585eb9947a412b5fe17ac5"
+  ],
+  "complexity_level": "",
+  "time": "2023-10-07",
+  "lost": "~$2.9M",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://slowmist.medium.com/a-deep-dive-into-the-stars-arena-attack-765649d7fc6a', 'https://www.certik.com']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:39.159552+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://slowmist.medium.com/a-deep-dive-into-the-stars-arena-attack-765649d7fc6a",
+      "https://www.certik.com"
+    ]
+  }
+}

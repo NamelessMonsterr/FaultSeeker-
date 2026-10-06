@@ -1,0 +1,29 @@
+{
+  "name": "Interest Protocol",
+  "cause": "Bypassed Insolvency Check",
+  "platform": "Optimism",
+  "transaction_hash": [
+    "0x18e34ce214211afedb6008c0cd00d476ce71222643521dbff5e2b65cdb2ccb80"
+  ],
+  "complexity_level": "",
+  "time": "2026-03-24",
+  "lost": "~$57K",
+  "location": {},
+  "disclosure": {
+    "time": "",
+    "link": "['https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2026-03/Univ3CollateralToken_exp.sol', 'https://x.com/DefimonAlerts/status/2036449500512891317']"
+  },
+  "verification": {
+    "verified_by": "audit-fixes incident research (2026-10-06)",
+    "verified_at": "2026-10-06T13:27:20.383598+00:00",
+    "hash_format_valid": true,
+    "hash_pattern_check": "pass (no synthetic markers)",
+    "onchain_resolvable": false,
+    "onchain_check_method": "no reachable RPC for chain in audit environment",
+    "trace_features": "unavailable offline \u2014 functioncall_count, address_count, max_depth, class, gas_cost left empty; needs archive+trace RPC",
+    "sources": [
+      "https://raw.githubusercontent.com/SunWeb3Sec/DeFiHackLabs/main/src/test/2026-03/Univ3CollateralToken_exp.sol",
+      "https://x.com/DefimonAlerts/status/2036449500512891317"
+    ]
+  }
+}
