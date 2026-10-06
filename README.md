@@ -11,7 +11,7 @@
 [![Chains](https://img.shields.io/badge/Chains-10%20EVM-f97316?style=flat-square&logo=ethereum&logoColor=white)](#-supported-networks)
 [![Dataset](https://img.shields.io/badge/Dataset-1059%20Exploit%20Txns-dc2626?style=flat-square&logo=databricks&logoColor=white)](#-benchmark--evaluation)
 [![Benign](https://img.shields.io/badge/Benign-10000%20Real%20Traces-0ea5e9?style=flat-square&logo=databricks&logoColor=white)](#-benchmark--evaluation)
-[![Tests](https://img.shields.io/badge/Tests-201%20Passing-16a34a?style=flat-square&logo=pytest&logoColor=white)](#-development)
+[![Tests](https://img.shields.io/badge/Tests-223%20Passing-16a34a?style=flat-square&logo=pytest&logoColor=white)](#-development)
 [![Status](https://img.shields.io/badge/Status-Research%20Active-6366f1?style=flat-square)](#-citation)
 
 
@@ -40,7 +40,7 @@ Most exploit analysis tools stop at detection. FaultSeeker++ goes further — fr
 | 🧑‍💻 **Human-in-the-loop checkpoints** | The analyst stays in the loop at critical decision points instead of blindly trusting model output. |
 | 📊 **Structured evidence** | Findings include signal breakdowns, confidence scores, graph context, and priority rankings. |
 | 🌐 **10-chain coverage** | Ethereum, BSC, Polygon, Arbitrum, Optimism, Avalanche, Base, Fantom, Gnosis, and zkSync. |
-| 🧪 **Reproducible benchmarks** | 1,059 annotated exploit transactions (231 manually verified + 828 source-validated), 10,000 benign traces, pre-trained logistic calibrator, and full LaTeX tables in `reports/research_results/`. |
+| 🧪 **Reproducible benchmarks** | 1,059 annotated exploit transactions (212 manually verified + 847 source-validated), 10,000 benign traces, pre-trained logistic calibrator, and full LaTeX tables in `reports/research_results/`. |
 | 🔬 **Research tooling** | FAEGL adaptive fallback, TIG graph reasoning, logistic confidence calibrator (`data/models/calibrator.json`), adversarial perturbation suite, and statistical evaluation utilities. |
 
 ---
@@ -188,7 +188,7 @@ python -m faultseeker.core.cross_chain_runner --limit 5 --chains eth bsc arbitru
 
 ### Dataset
 
-**231 strict verified exploit transactions** across 8 currently represented EVM chains, with **80+ vulnerability labels** sourced from postmortems, incident writeups, and exploit repositories.
+**212 strict verified exploit transactions** across 8 currently represented EVM chains, with **80+ vulnerability labels** sourced from postmortems, incident writeups, and exploit repositories.
 
 For TDSC-scale experimentation, FaultSeeker++ now also ships a deduplicated **1,059-row exploit research pool** built from the strict verified benchmark plus source-backed DeFiHackLabs candidates. Candidate rows remain separate from strict ground truth until RPC/manual validation is complete.
 
@@ -314,7 +314,7 @@ Research paper asset:
 
 Current empirical status:
 
-- Strict verified exploit rows: **231**.
+- Strict verified exploit rows: **212** (231 − 96 synthetic patterned hashes removed across two audit rounds + 77 real sourced replacements; 19 slots had no verifiable incident and were left empty, not padded).
 - Exploit research pool: **1,059 / 1,000**, target met.
 - Source-backed candidate rows still requiring RPC/manual promotion: **828**.
 - Benign minimum target: **10,000 / 10,000** staged and schema-validated.
