@@ -1,10 +1,10 @@
 {
   "generated_by": "benchmark/compute_metrics.py (audit-fixes)",
-  "generated_at": "2026-10-06T13:58:01.003286+00:00",
-  "git_commit": "8c1c39b",
+  "generated_at": "2026-10-06T14:07:45.628186+00:00",
+  "git_commit": "d1c0fe3",
   "dataset": "benchmark_classification_fixed.csv",
-  "dataset_sha256": "42bcae3dac416748a88e3fe1abbac080a8c1d5ad2bad651b63abd0699f45ac7e",
-  "dataset_rows": 183,
+  "dataset_sha256": "e9af5119275f4b8add3f11fee5d3837e18eb77db8abe73b74ad47067604348f3",
+  "dataset_rows": 196,
   "methodology": "Real SignalExtractor._check_reentrancy + _reentrancy_confidence_tier run per trace bundle in benchmark/traces/. TP/FP/FN per paper \u00a7IV-B; metrics over evaluable rows only. Replaces hand-typed constants.",
   "tier_definitions_code": {
     "CONFIRMED_REENTRANCY": 0.85,
@@ -22,9 +22,9 @@
     "CONFIRMED_REENTRANCY",
     "HIGH_RISK_REENTRANCY"
   ],
-  "n_reentrancy_labeled": 16,
+  "n_reentrancy_labeled": 17,
   "n_evaluated": 0,
-  "n_unevaluable": 183,
+  "n_unevaluable": 196,
   "confusion": {
     "tp": 0,
     "fp": 0,
@@ -956,6 +956,71 @@
     {
       "txn_hash": "0xde903046b5cdf27a5391b771f41e645e9cc670b649f7b87b1524fc4076f45983",
       "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xe30dc75253eecec3377e03c532aa41bae1c26909bc8618f21fb83d4330a01018",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xcca7ea9d48e00e7e32e5d005b57ec3cac28bc3ad0181e4ca208832e62aa52efe",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xec1b969e1435a1449dd5179404c54b5c60e49f15a1bf6bf8922e8d2978102f4a",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x15c835c070672948b3487d35254bce96831bec9f5212f78b04e683fed74bf4a2",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xca4d0d24aa448329b7d4eb81be653224a59e7b081fc7a1c9aad59c5a38d0ae19",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xcc71a3bb131c73462b0f25533070113a63c85e942a22e18bc945eec184eb5799",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xe31c681eee764fb94b1b6bda3bbb0e4f25acb129c19040b9f58ad30541980979",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x1f00da742318ad1807b6ea8283bfe22b4a8ab0bc98fe428fbfe443746a4a7353",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xc523c6307b025ebd9aef155ba792d1ba18d5d83f97c7a846f267d3d9a3004e8c",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xd063b3848a6b8c67f46990ab166665d454147855819acb60c083c0aea0180b2d",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xed62bb27bd1058d3d7cc93d55421d6d0001ced8cb4529b02773f5126a4edb08b",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x45c0ccfd3ca1b4a937feebcb0f5a166c409c9e403070808835d41da40732db96",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x5d54fa839821e370b020d13a9b11b6f4f8cadc4eaed0a404ea17ad1bd725dbde",
+      "chain": "polygon",
       "reason": "no trace bundle in traces-dir"
     }
   ]
