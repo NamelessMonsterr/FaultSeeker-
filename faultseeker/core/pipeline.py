@@ -180,26 +180,38 @@ class FaultSeekerPipeline:
         print("\n[Stage 2] Task-Driven Function Analysis")
         print("   [+] Ranking suspicious functions...")
 
-        # Stage 2a: Function Ranking (fast, deterministic)
-        tx_analysis = {
-            'transaction_hash': forensics_result.transaction_hash,
-            'chain': forensics_result.chain,
-            'trace': forensics_result.trace,
-            'repeated_patterns': forensics_result.repeated_patterns,
-            'function_call_loc_memo': forensics_result.function_call_loc_memo
-        }
-        ranking_result = self.function_ranker.rank(forensics_result, tx_analysis)
+        # BENIGN fast-path (audit-fixes): the RuleClassifier found positive
+        # evidence that no contract code executed, so no contract exploit is
+        # possible — skip Stage 2 (ranking + LLM analysis) entirely.
+        if getattr(forensics_result, 'rule_verdict', '') == 'BENIGN':
+            print("   [OK] Rule verdict BENIGN (no contract execution) — skipping Stage 2")
+            analysis_result = {
+                'finalized_vulnerable_functions': [],
+                'skipped_stage2': True,
+                'skip_reason': 'BENIGN rule verdict: no contract code executed',
+                'rule_verdict': 'BENIGN',
+            }
+        else:
+            # Stage 2a: Function Ranking (fast, deterministic)
+            tx_analysis = {
+                'transaction_hash': forensics_result.transaction_hash,
+                'chain': forensics_result.chain,
+                'trace': forensics_result.trace,
+                'repeated_patterns': forensics_result.repeated_patterns,
+                'function_call_loc_memo': forensics_result.function_call_loc_memo
+            }
+            ranking_result = self.function_ranker.rank(forensics_result, tx_analysis)
 
-        print(f"   [OK] Ranking completed - {len(ranking_result.address_list)} addresses to analyze")
-        print("   [+] Analyzing vulnerable functions...")
+            print(f"   [OK] Ranking completed - {len(ranking_result.address_list)} addresses to analyze")
+            print("   [+] Analyzing vulnerable functions...")
 
-        # Stage 2b: In-Depth Function Analysis (LLM-driven, uses ranking output)
-        analysis_result = self.function_analyzer.run(forensics_result, txn_seq, txn_info, ranking_result)
+            # Stage 2b: In-Depth Function Analysis (LLM-driven, uses ranking output)
+            analysis_result = self.function_analyzer.run(forensics_result, txn_seq, txn_info, ranking_result)
 
-        if not analysis_result:
-            raise RuntimeError("Stage 2 (Function Analysis) failed to produce results")
+            if not analysis_result:
+                raise RuntimeError("Stage 2 (Function Analysis) failed to produce results")
 
-        print("   [OK] Function analysis completed")
+            print("   [OK] Function analysis completed")
 
         # Stage 3: Confidence Scoring — paper §3.6 + §5.3
         # The 4-factor formula C(f) = 0.30·PMS + 0.25·CES + 0.25·TCS + 0.20·LCS
@@ -299,6 +311,12 @@ class FaultSeekerPipeline:
         result = {
             'transaction_hash': forensics_result.transaction_hash,
             'chain': forensics_result.chain,
+
+            # Stage 1.5 rule verdict (audit-fixes: BENIGN skips Stage 2)
+            'rule_verdict': getattr(forensics_result, 'rule_verdict', 'UNKNOWN'),
+            'rule_confidence': getattr(forensics_result, 'rule_confidence', 0.0),
+            'skipped_stage2': bool(analysis_result.get('skipped_stage2', False)),
+            'skip_reason': analysis_result.get('skip_reason', ''),
 
             # Main analysis results
             'ranked_suspicious_functions': analysis_result.get('ranked_result', []),

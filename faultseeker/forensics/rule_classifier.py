@@ -10,7 +10,7 @@ Output: (verdict, confidence, matched_rule, vuln_type_hint)
   vuln_type    → best-guess vulnerability category (matches benchmark CSV)
 
 Design goals:
-  - BENIGN → skip LLM entirely (~40% faster on clean txns)
+  - BENIGN → skip LLM entirely (no contract code executed; skip rate unmeasured)
   - EXPLOIT with confidence ≥ 0.85 → LLM only explains, doesn't re-classify
   - UNCERTAIN → full LLM reasoning pipeline (existing behaviour)
 """
@@ -42,6 +42,7 @@ def classify(signals: SignalBundle) -> tuple[str, float, str, str]:
     Returns (verdict, confidence, matched_rule, vuln_type_hint).
 
     Rule priority (highest confidence first):
+     0. No contract execution → BENIGN (skip Stage 2)
      1. Reentrancy + profit
      2. Flash Loan + profit
      3. Flash Loan + price manipulation
@@ -56,6 +57,13 @@ def classify(signals: SignalBundle) -> tuple[str, float, str, str]:
     11. No signals → UNCERTAIN
     12. Ambiguous → UNCERTAIN
     """
+
+    # ── Rule 0: No contract code executed → BENIGN ──────────────────────────
+    # Positive benign evidence (set by SignalExtractor._check_no_contract_execution):
+    # pure native-currency transfer(s); a contract exploit is impossible.
+    if signals.no_contract_execution:
+        return ('BENIGN', 0.90, 'no_contract_execution',
+                VULN_TYPE_MAP['no_signals'])
 
     # ── Rule 1: Reentrancy + confirmed profit ─────────────────────────────────
     if signals.reentrancy_score >= 0.85 and signals.profit_extraction_eth > 0.5:

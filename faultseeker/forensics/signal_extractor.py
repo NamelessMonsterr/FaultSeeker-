@@ -108,6 +108,9 @@ class SignalBundle:
     # Multi-transaction context flags
     single_transfer_only: bool = False  # ONLY a bare transfer() — likely donation step in multi-tx exploit
 
+    # Benign fast-path: positive evidence that no contract code executed
+    no_contract_execution: bool = False  # pure native-currency transfer(s); no contract exploit possible
+
     # Convenience
     top_vuln_hints: list = field(default_factory=list)   # ordered list of suspected types
     raw: dict = field(default_factory=dict)              # full evidence for LLM context
@@ -270,6 +273,10 @@ class SignalExtractor:
         normalized: list[dict] = []
         for raw in self.storage_events:
             if not isinstance(raw, dict):
+                continue
+            # SLOAD reads are not writes — the reentrancy scorer needs
+            # SSTORE events only. Missing 'op' ⇒ legacy SSTORE event.
+            if raw.get('op', 'SSTORE') != 'SSTORE':
                 continue
 
             address = str(raw.get('address') or '').lower()
@@ -780,6 +787,34 @@ class SignalExtractor:
 
     # ── signal: Profit Extraction ─────────────────────────────────────────────
 
+    def _check_no_contract_execution(self) -> None:
+        """
+        Positive benign evidence: the trace shows no contract code execution at
+        all (pure native-currency value transfers). A smart-contract exploit
+        cannot exist in such a transaction, so the RuleClassifier may emit
+        BENIGN and the pipeline may skip Stage 2 entirely.
+
+        Conservative by design: any named function, any calldata params, any
+        non-CALL frame (DELEGATECALL/STATICCALL/CREATE/…), or any SSTORE event
+        disqualifies. Empty/missing traces leave the flag False (unknown).
+        """
+        flat = self.flat or []
+        if not flat:
+            return
+        for frame in flat:
+            if not isinstance(frame, dict):
+                continue
+            fn = (frame.get('function') or '').strip()
+            params = (frame.get('params') or '').strip()
+            ctype = (frame.get('call_type') or 'call').strip().lower()
+            if fn or params:
+                return  # contract function invoked
+            if ctype != 'call':
+                return  # DELEGATECALL / STATICCALL / CREATE / …
+        if self.storage_events:
+            return  # state writes imply contract execution
+        self.signals.no_contract_execution = True
+
     def _check_profit_extraction(self) -> None:
         """
         Estimate attacker profit from balance_change dict.
@@ -990,6 +1025,7 @@ class SignalExtractor:
         self._check_access_control()
         self._check_inflation_attack()       # ← Compoundv2-style inflation
         self._check_profit_extraction()
+        self._check_no_contract_execution()  # ← benign fast-path signal
         self._collate_hints()
         self.signals.reentrancy_confidence_tier = self._reentrancy_confidence_tier()
 

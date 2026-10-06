@@ -139,6 +139,7 @@ class HybridLLMRouter:
         agent_role: str = '',
         prompt_text: str = '',
         tier_override: Optional[int] = None,
+        local_confidence: Optional[float] = None,
     ) -> str:
         """
         Select the appropriate model for a query.
@@ -147,6 +148,11 @@ class HybridLLMRouter:
             agent_role: Name/role of the agent making the query
             prompt_text: The prompt text (used for heuristic classification)
             tier_override: Force a specific tier (1, 2, or 3)
+            local_confidence: For Tier 2, the measured confidence (0.0–1.0) of
+                the local model's response. When provided and below
+                ``confidence_gate`` (θ_gate), the query escalates to the cloud
+                model. ``None`` (default) preserves the old behavior: Tier 2
+                goes local, escalation handled by the caller.
 
         Returns:
             Model name string suitable for build_agent()
@@ -174,6 +180,10 @@ class HybridLLMRouter:
         elif tier == 2:
             if self.routing_strategy == 'cloud-first':
                 return self.cloud_model
+            # θ_gate escalation (audit-fixes): a measured local confidence
+            # below the gate escalates this query to the cloud model.
+            if local_confidence is not None and local_confidence < self.confidence_gate:
+                return self.cloud_model
             return self.local_model  # Local first, fallback handled by caller
         else:  # tier 3
             return self.cloud_model
@@ -187,6 +197,41 @@ class HybridLLMRouter:
     def should_fallback_to_cloud(self, tier: int) -> bool:
         """Check if a tier 2 query should fall back to cloud."""
         return tier == 2
+
+    def should_escalate(
+        self,
+        agent_role: str = '',
+        tier: Optional[int] = None,
+        local_confidence: float = 0.0,
+    ) -> bool:
+        """
+        θ_gate escalation check (audit-fixes): Tier 2 queries escalate to the
+        cloud model when the measured local confidence falls below
+        ``confidence_gate``. Tiers 1 and 3 never escalate through this path
+        (Tier 1 is always local, Tier 3 is always cloud).
+        """
+        resolved = tier if tier is not None else self.get_tier(agent_role)
+        return resolved == 2 and local_confidence < self.confidence_gate
+
+    def escalate_agent(self, agent: Any) -> Any:
+        """
+        Rebuild an agent created by :func:`build_routed_agent` with the cloud
+        model, preserving its system prompt and role. Used for Tier 2 θ_gate
+        escalation retries.
+        """
+        from faultseeker.utils.agent import build_provider_agent
+        role = getattr(agent, 'agent_role', '')
+        system_prompt = getattr(agent, 'system_prompt', '')
+        if not system_prompt:
+            try:
+                system_prompt = (agent.memory or [{}])[0].get('content', '')
+            except Exception:
+                system_prompt = ''
+        new_agent = build_provider_agent(system_prompt, self.cloud_model)
+        setattr(new_agent, 'router', self)
+        setattr(new_agent, 'agent_role', role)
+        setattr(new_agent, 'escalated_from_local', True)
+        return new_agent
 
     def record_query(
         self,
@@ -347,4 +392,5 @@ def build_routed_agent(
     if router:
         setattr(agent, 'router', router)
         setattr(agent, 'agent_role', agent_role)
+        setattr(agent, 'system_prompt', system_prompt)
     return agent
