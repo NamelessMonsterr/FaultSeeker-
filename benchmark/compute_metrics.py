@@ -11,11 +11,15 @@ Protocol (paper §IV-B / Table V):
   * For each benchmark row whose ``vuln_type`` contains "reentrancy", run the
     real detector (``SignalExtractor._check_reentrancy`` +
     ``_reentrancy_confidence_tier``) on that transaction's trace bundle.
-  * TP: tier in {CONFIRMED, HIGH_RISK} on a reentrancy-labeled row.
-  * FP: tier in {CONFIRMED, HIGH_RISK} on a non-reentrancy row (evaluated over
-    every non-reentrancy row that has trace data).
+  * TP: tier in {CONFIRMED_REENTRANCY, HIGH_RISK_REENTRANCY} on a
+    reentrancy-labeled row.
+  * FP: tier in {CONFIRMED_REENTRANCY, HIGH_RISK_REENTRANCY} on a
+    non-reentrancy row (evaluated over every non-reentrancy row that has
+    trace data).
   * FN: reentrancy-labeled row with any lower tier.
   * P = TP/(TP+FP), R = TP/(TP+FN), F1 = 2PR/(P+R), over evaluable rows only.
+  * A trace bundle with no usable data (empty {} or no trace frames and no
+    storage events) is UNEVALUABLE — it is never scored as a negative.
 
 Trace bundles: ``benchmark/traces/<txhash>.json`` — the canonical format the
 pipeline's own TransactionSequencer produces (keys: ``trace``,
@@ -24,10 +28,12 @@ pipeline's own TransactionSequencer produces (keys: ``trace``,
 trace data a row is listed as unevaluable (never scored from metadata).
 
 Tier-mapping note (audit finding): the implementation's tiers are
-CONFIRMED (≥0.85), HIGH_RISK (≥0.70), SUSPICIOUS (≥0.45), NOT_REENTRANCY.
+CONFIRMED_REENTRANCY (≥0.85), HIGH_RISK_REENTRANCY (≥0.70),
+POSSIBLE_REENTRANCY (≥ detection threshold, default 0.45), NOT_REENTRANCY.
 The paper's Table V names different thresholds (High ≥0.80 / Medium ≥0.55 /
 Low ≥0.30) that do not exist in code. This script uses the implementation's
-tiers and records both for transparency.
+tiers and records both for transparency. Round2: tier names corrected —
+the detector never returned 'CONFIRMED'/'HIGH_RISK'/'SUSPICIOUS'.
 
 Usage:
     python benchmark/compute_metrics.py [--traces-dir benchmark/traces]
@@ -51,11 +57,16 @@ BENCHMARK_CSV = os.path.join(REPO_ROOT, 'benchmark', 'benchmark_classification_f
 DEFAULT_TRACES = os.path.join(REPO_ROOT, 'benchmark', 'traces')
 DEFAULT_OUT = os.path.join(REPO_ROOT, 'reports', 'research_results', 'reentrancy_metrics.json')
 
-POSITIVE_TIERS = {'CONFIRMED', 'HIGH_RISK'}
+# Round2 fix: the detector returns 'CONFIRMED_REENTRANCY' / 'HIGH_RISK_REENTRANCY'
+# (signal_extractor._reentrancy_confidence_tier), NOT 'CONFIRMED' / 'HIGH_RISK'.
+# The old names never matched, so every confirmed attack scored negative.
+POSITIVE_TIERS = {'CONFIRMED_REENTRANCY', 'HIGH_RISK_REENTRANCY'}
 
-# Code's actual tier thresholds (signal_extractor._reentrancy_confidence_tier)
-CODE_TIERS = {'CONFIRMED': 0.85, 'HIGH_RISK': 0.70, 'SUSPICIOUS': 0.45,
-              'NOT_REENTRANCY': 0.0}
+# Code's actual tier thresholds (signal_extractor._reentrancy_confidence_tier).
+# NOTE: there is no 'SUSPICIOUS' tier in code; the middle tier is
+# 'POSSIBLE_REENTRANCY' at the configurable detection threshold (default 0.45).
+CODE_TIERS = {'CONFIRMED_REENTRANCY': 0.85, 'HIGH_RISK_REENTRANCY': 0.70,
+              'POSSIBLE_REENTRANCY': 0.45, 'NOT_REENTRANCY': 0.0}
 # Paper Table V's claimed thresholds (not implemented)
 PAPER_TIERS = {'High': 0.80, 'Medium': 0.55, 'Low': 0.30}
 
@@ -99,6 +110,21 @@ def score_trace(SignalExtractor, bundle: dict, txn_hash: str, chain: str):
     return round(float(se.signals.reentrancy_score), 4), tier
 
 
+def bundle_has_data(bundle: dict) -> bool:
+    """Round2: an empty {} (or a bundle with no frames and no storage events)
+    carries no signal for the detector. Scoring it would manufacture a
+    negative — it must be UNEVALUABLE instead."""
+    if not isinstance(bundle, dict) or not bundle:
+        return False
+    for key in ('trace', 'canonical_trace', 'flatten_trace', 'storage_events'):
+        val = bundle.get(key)
+        if isinstance(val, (list, tuple)) and len(val):
+            return True
+        if isinstance(val, dict) and len(val):
+            return True
+    return False
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description='Compute reentrancy metrics from real detector output')
     ap.add_argument('--traces-dir', default=DEFAULT_TRACES)
@@ -126,6 +152,10 @@ def main() -> int:
         try:
             with open(trace_path, encoding='utf-8') as f:
                 bundle = json.load(f)
+            if not bundle_has_data(bundle):
+                unevaluable.append({'txn_hash': h, 'chain': chain,
+                                    'reason': 'trace bundle empty: no frames or storage events'})
+                continue
             score, tier = score_trace(SignalExtractor, bundle, h, chain)
         except Exception as e:  # noqa: BLE001 — record, don't crash the run
             unevaluable.append({'txn_hash': h, 'chain': chain,
@@ -171,7 +201,9 @@ def main() -> int:
         'tier_definitions_code': CODE_TIERS,
         'tier_definitions_paper_tableV': PAPER_TIERS,
         'tier_note': ('Paper Table V thresholds (0.80/0.55/0.30) are NOT implemented; '
-                      'the code uses 0.85/0.70/0.45. Metrics below use the code tiers.'),
+                      'the code uses CONFIRMED_REENTRANCY/HIGH_RISK_REENTRANCY/'
+                      'POSSIBLE_REENTRANCY/NOT_REENTRANCY at 0.85/0.70/0.45. '
+                      'Metrics below use the code tiers.'),
         'positive_tiers': sorted(POSITIVE_TIERS),
         'n_reentrancy_labeled': sum(1 for r in rows if 'reentrancy' in (r.get('vuln_type') or '').lower()),
         'n_evaluated': n_eval,

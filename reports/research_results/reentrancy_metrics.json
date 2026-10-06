@@ -1,15 +1,15 @@
 {
   "generated_by": "benchmark/compute_metrics.py (audit-fixes)",
-  "generated_at": "2026-10-06T13:27:53.208197+00:00",
-  "git_commit": "fca6b99",
+  "generated_at": "2026-10-06T13:58:01.003286+00:00",
+  "git_commit": "8c1c39b",
   "dataset": "benchmark_classification_fixed.csv",
-  "dataset_sha256": "3223253f8207ebe814d575e3196d20f0a52582e8c1d1bffc22d9b827b5475701",
-  "dataset_rows": 213,
+  "dataset_sha256": "42bcae3dac416748a88e3fe1abbac080a8c1d5ad2bad651b63abd0699f45ac7e",
+  "dataset_rows": 183,
   "methodology": "Real SignalExtractor._check_reentrancy + _reentrancy_confidence_tier run per trace bundle in benchmark/traces/. TP/FP/FN per paper \u00a7IV-B; metrics over evaluable rows only. Replaces hand-typed constants.",
   "tier_definitions_code": {
-    "CONFIRMED": 0.85,
-    "HIGH_RISK": 0.7,
-    "SUSPICIOUS": 0.45,
+    "CONFIRMED_REENTRANCY": 0.85,
+    "HIGH_RISK_REENTRANCY": 0.7,
+    "POSSIBLE_REENTRANCY": 0.45,
     "NOT_REENTRANCY": 0.0
   },
   "tier_definitions_paper_tableV": {
@@ -17,14 +17,14 @@
     "Medium": 0.55,
     "Low": 0.3
   },
-  "tier_note": "Paper Table V thresholds (0.80/0.55/0.30) are NOT implemented; the code uses 0.85/0.70/0.45. Metrics below use the code tiers.",
+  "tier_note": "Paper Table V thresholds (0.80/0.55/0.30) are NOT implemented; the code uses CONFIRMED_REENTRANCY/HIGH_RISK_REENTRANCY/POSSIBLE_REENTRANCY/NOT_REENTRANCY at 0.85/0.70/0.45. Metrics below use the code tiers.",
   "positive_tiers": [
-    "CONFIRMED",
-    "HIGH_RISK"
+    "CONFIRMED_REENTRANCY",
+    "HIGH_RISK_REENTRANCY"
   ],
-  "n_reentrancy_labeled": 17,
+  "n_reentrancy_labeled": 16,
   "n_evaluated": 0,
-  "n_unevaluable": 213,
+  "n_unevaluable": 183,
   "confusion": {
     "tp": 0,
     "fp": 0,
@@ -669,151 +669,6 @@
       "reason": "no trace bundle in traces-dir"
     },
     {
-      "txn_hash": "0x2a1b3c4d5e6f7a8b9c0d1e2f3a4b5c6da7e8f9a0b1c2d3e4f5a2b7c8d9e0f1a2",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x7f1e2d3c4b5a697880919aa3b4c5d6e7f8091a2b3c4d5e6f7a8b9c0d2e2f3a4b",
-      "chain": "bsc",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xe4b1f2a3c4d5e6f708192ba3b4c5d6e7f8091a2b3c4d5e6f7a8b9c0d3e2f3a4b",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d4e2f3a4b5c6d",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xb7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b5c2d3e4f5a6b7c8",
-      "chain": "arbitrum",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xf1e2d3c4b5a6978809192a3b4c5d6e7f8091a2b3c4d5e6f7a8b9c0d1e2f3a15c",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a216c",
-      "chain": "base",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b317d",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c418e",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d519f",
-      "chain": "optimism",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6200",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7211",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8322",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9433",
-      "chain": "bsc",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xa0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a544",
-      "chain": "bsc",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b655",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xc2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c766",
-      "chain": "bsc",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xd3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d877",
-      "chain": "bsc",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xe4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e988",
-      "chain": "bsc",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xa6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabb",
-      "chain": "base",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xb7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbcc",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xc8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccdd",
-      "chain": "bsc",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xd9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9cdb1c2d3e4f5aabbccddee",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xe0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xf1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff00",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x12b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff0011",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x23c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff001122",
-      "chain": "arbitrum",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x34d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff00112233",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0x45e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff0011223344",
-      "chain": "eth",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
       "txn_hash": "0x56e09abb35ff12271fdb38ff8a23e4d4a7396844426a94c4d3af2e8b7a0a2813",
       "chain": "eth",
       "reason": "no trace bundle in traces-dir"
@@ -855,11 +710,6 @@
     },
     {
       "txn_hash": "0x10f2c28f5d6cd8d7b56210b4d5e0cece27e45a30808cd3d3443c05d4275bb008",
-      "chain": "polygon",
-      "reason": "no trace bundle in traces-dir"
-    },
-    {
-      "txn_hash": "0xa1b2c3d4e5f6a7b000c9d0e1f2a3b4c56d7e8f90a1b2c3d4e5f6a7b8c9d0e1f2",
       "chain": "polygon",
       "reason": "no trace bundle in traces-dir"
     },
