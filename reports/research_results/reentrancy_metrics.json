@@ -1,30 +1,1112 @@
 {
-  "evaluation": "SSTORE-Backed Reentrancy Detector (Paper Section 6.6)",
-  "dataset": {
-    "reentrancy_labeled_transactions": 18,
-    "source": "benchmark/benchmark_classification_fixed.csv (vulnerability_type=Reentrancy)"
+  "generated_by": "benchmark/compute_metrics.py (audit-fixes)",
+  "generated_at": "2026-10-06T13:27:53.208197+00:00",
+  "git_commit": "fca6b99",
+  "dataset": "benchmark_classification_fixed.csv",
+  "dataset_sha256": "3223253f8207ebe814d575e3196d20f0a52582e8c1d1bffc22d9b827b5475701",
+  "dataset_rows": 213,
+  "methodology": "Real SignalExtractor._check_reentrancy + _reentrancy_confidence_tier run per trace bundle in benchmark/traces/. TP/FP/FN per paper \u00a7IV-B; metrics over evaluable rows only. Replaces hand-typed constants.",
+  "tier_definitions_code": {
+    "CONFIRMED": 0.85,
+    "HIGH_RISK": 0.7,
+    "SUSPICIOUS": 0.45,
+    "NOT_REENTRANCY": 0.0
   },
-  "results": {
-    "sstore_backed_f1": 0.86,
-    "structural_only_f1": 0.69,
-    "repeated_address_baseline_f1": 0.57,
-    "sstore_gain_over_structural_pp": 17,
-    "sstore_gain_over_baseline_pp": 29
+  "tier_definitions_paper_tableV": {
+    "High": 0.8,
+    "Medium": 0.55,
+    "Low": 0.3
   },
-  "false_positive_case_study": {
-    "protocol": "Compound Finance cToken",
-    "description": "Legitimate recursive calls where the same contract appears at multiple call depths. Structural methods incorrectly flag as HIGH_RISK_REENTRANCY. SSTORE analysis finds no cross-depth storage slot writes and correctly outputs NOT_REENTRANCY.",
-    "detector_output": "NOT_REENTRANCY",
-    "structural_output": "HIGH_RISK_REENTRANCY",
-    "verdict": "True negative (correct)"
-  },
-  "sstore_signals": [
-    {"signal": "repeated_slot_nested",   "weight": 0.55, "description": "Same slot rewritten across nested frames, depth span >= 2"},
-    {"signal": "write_after_ext_call",   "weight": 0.25, "description": "SSTORE after a mutating CALL boundary"},
-    {"signal": "same_func_reentered",    "weight": 0.20, "description": "Same (callee, selector) reappears deeper on stack"},
-    {"signal": "write_before_and_after", "weight": 0.20, "description": "State write before and after external call, same frame"},
-    {"signal": "same_slot_rewritten",    "weight": 0.10, "description": "Same slot written >= 2 times in any context"}
+  "tier_note": "Paper Table V thresholds (0.80/0.55/0.30) are NOT implemented; the code uses 0.85/0.70/0.45. Metrics below use the code tiers.",
+  "positive_tiers": [
+    "CONFIRMED",
+    "HIGH_RISK"
   ],
-  "oz_guard_filter": "OpenZeppelin ReentrancyGuard mutex slots (1->2->1 toggles) are pre-filtered before scoring",
-  "fallback_mode": "When SSTORE data absent, 3 structural signals apply with 0.75x penalty and 0.80 score cap"
+  "n_reentrancy_labeled": 17,
+  "n_evaluated": 0,
+  "n_unevaluable": 213,
+  "confusion": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 0,
+    "tn": 0
+  },
+  "metrics": {
+    "precision": null,
+    "recall": null,
+    "f1": null
+  },
+  "metrics_note": "null when no rows are evaluable: without trace bundles (benchmark/traces/*.json, needs archive+trace RPC) the F1 cannot be measured. It is reported as null, not invented.",
+  "structural_only_f1": null,
+  "structural_only_note": "not measured: no structural-only detector variant exists in code",
+  "repeated_address_baseline_f1": null,
+  "repeated_address_baseline_note": "not measured: no baseline implementation in repo",
+  "per_row": [],
+  "unevaluable": [
+    {
+      "txn_hash": "0xbea605b238c85aabe5edc636219155d8c4879d6b05c48091cf1f7286bd4702ba",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x0237855c63eb85c5f437fba5267cc869a08c58a49501e3e5ebec9990bdd97565",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x57b589f631f8ff20e2a89a649c4ec2e35be72eaecf155fdfde981c0fec2be5ba",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x20ecd8310a2cc7f7774aa5a045c8a99ad84a8451d6650f24e0911e9f4355b13a",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x90b468608fbcc7faef46502b198471311baca3baab49242a4a85b73d4924379b",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xb61413c495fdad6114a7aa863a00b2e3c28945979a10885b12b30316ea9f072c",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x3ed75df83d907412af874b7998d911fdf990704da87c2b1a8cf95ca5d21504cf",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x23fcf9d4517f7cc39815b09b0a80c023ab2c8196c826c93b4100f2e26b701286",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x46deef0f52e3a983b67abf4714448a41dd7ffd6d32d32da69d62081c68ad7882",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xac7292e7d0ec8ebe1c94203d190874b2aab30592327b6cc875d00f18de6f3133",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x2606d459a50ca4920722a111745c2eeced1d8a01ff25ee762e22d5d4b1595739",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xc0be8c3792a5b1ba7d653dc681ff611a5b79a75fe51c359cf1aac633e9441574",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x491cf8b2a5753fdbf3096b42e0a16bc109b957dc112d6537b1ed306e483d0744",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xfc872bf5ca8f04b18b82041ec563e4abf2e31e1fc27d1ea5dee39bc8a79d2d06",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x21d8b164f0cb8beb1ed27d164ed986c3fc26b33655ce18226b05b9cfcf6cd93c",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xc9b2cbc1437bbcd8c328b6d7cdbdae33d7d2a9ef07eca18b4922aac0430991e7",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xf0a13b445674094c455de9e947a25bade75cac9f5176695fca418898ea25742f",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x800a5b3178f680feebb81af69bd3dff791b886d4ce31615e601f2bb1f543bb2e",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xdd0636e2598f4d7b74f364fedb38f334365fd956747a04a6dd597444af0bc1c0",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x1194e1d6085885ce054a7ff8cd3cd0c3fa308ec87e4ccde8dd0549842fef4f1b",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x0b062361e16a2ea0942cc1b4462b6584208c8c864609ff73aaa640aaa2d92428",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x33479bcfbc792aa0f8103ab0d7a3784788b5b0e1467c81ffbed1b7682660b4fa",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x9f4ef3cc55b016ea6b867807a09f80d1b2e36f6cd6fccfaf0182f46060332c57",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x8c3f442fc6d640a6ff3ea0b12be64f1d4609ea94edd2966f42c01cd9bdcf04b5",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xd9b3e229acc755881890394cc76fde0d7b83b1abd4d046b0f69c1fd9fd495ff6",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x3c09c6306b67737227edc24c663462d870e7c2bf39e9ab66877a980c900dd5d5",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x998f1da472d927e74405b0aa1bbf5c1dbc50d74b39977bed3307ea2ada1f1d3f",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x35a73969f582872c25c96c48d8bb31c23eab8a49c19282c67509b96186734e60",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x72a252277e30ea6a37d2dc9905c280f3bc389b87f72b81a59aa8f50baebd8eaa",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xa992b28ecf2eed778d20d5200946ea341b950be0c3d78b1f2237a4d8d795de95",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x07e5568b71f1f4d9234d5925473c598865c5ee1800348c1c4b044c6f0223f308",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x48d22ea24c1ae707b8b17ca2a3ea81a1aee64a075d93e5bff81a7370e2cacea7",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xdaccbc437cb07427394704fbcc8366589ffccf974ec6524f3483844b043f31d5",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x138daa4cbeaa3db42eefcec26e234fc2c89a4aa17d6b1870fc460b2856fd11a6",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x19c04bc04ee8117abfdf0c9301787b12b27f3c5c13308b4f66711a8f0ecacc62",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x8a8145ab28b5d2a2e61d74c02c12350731f479b3175893de2014124f998bff32",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xda8f6a4bed7e5689a343d111632d37480c0316f1d20b732803c4bd482823e284",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x256979ae169abb7fbbbbc14188742f4b9debf48b48ad5b5207cadcc99ccb493b",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xd4fafa1261f6e4f9c8543228a67caf9d02811e4ad3058a2714323964a8db61f6",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6bfd9e286e37061ed279e4f139fbc03c8bd707a2cdd15f7260549052cbba79b7",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xeaef2831d4d6bca04e4e9035613be637ae3b0034977673c1c2f10903926f29c0",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x90fb0c9976361f537330a5617a404045ffb3fef5972cf67b531386014eeae7a9",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6200bf5c43c214caa1177c3676293442059b4f39eb5dbae6cfd4e6ad16305668",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x4f4d6909a442b4d86f79a9044dcada6a128ddd9f62c26f410134a72d2fc31389",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6fb7f8e9eb09d6ae17dbe82b2b42f46f64fb9c3197438b68ecf03e832d5fc791",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x35ecf595864400696853c53edf3e3d60096639b6071cadea6076c9c6ceb921c1",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x09925028ce5d6a54801d04ff8f39e79af6c24289e84b301ddcdb6adfa51e901b",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xc18ec2eb7d41638d9982281e766945d0428aaeda6211b4ccb6626ea7cff31f4a",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xd927843e30c6b2bf43103d83bca6abead648eac3cad0d05b1b0eb84cd87de9b6",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xfe8bc757d87e97a5471378c90d390df47e1b29bb9fca918b94acd8ecfaadc598",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x3d163bfbec5686d428a6d43e45e2626a220cc4fcfac7620c620b82c1f2537c78",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xf1818f62c635e5c80ef16b7857da812c74ce330ebed46682b4d173bffe84c666",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x4019890fe5a5bd527cd3b9f7ee6d94e55b331709b703317860d028745e33a8ca",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xa4e650772f6e6b7ecc0964fe4c3854850669d1467570a2fa2b6edfa0f112c4b7",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x7604c7dd6e9bcdba8bac277f1f8e7c1e4c6bb57afd4ddf6a16f629e8495a0281",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xaf46a42fe1ed7193b25c523723dc047c7500e50a00ecb7bbb822d665adb3e1f3",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x597d11c05563611cb4ad4ed4c57ca53bbe3b7d3fefc37d1ef0724ad58904742b",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xcdd93e37ba2991ce02d8ca07bf6563bf5cd5ae801cbbce3dd0babb22e30b2dbe",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x0eb8f8d148508e752d9643ccf49ac4cb0c21cbad346b5bbcf2d06974d31bd5c4",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xbd72bccec6dd824f8cac5d9a3a2364794c9272d7f7348d074b580e3c6e44312e",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xa6f63fcb6bec8818864d96a5b1bb19e8bd85ee37b2cc916412e720988440b2aa",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x3f1973fe56de5ecd59a815d3b14741cf48385903b0ccfe248f7f10c2765061f7",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x2e832f044b4a0a0b8d38166fe4d781ab330b05b9efa9e72a7a0895f1b984084b",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xb36486f032a450782d5d2fac118ea90a6d3b08cac3409d949c59b43bcd6dbb8f",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xaee0f8d1235584a3212f233b655f87b89f22f1d4890782447c4ef742b37af58d",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x24a68d2a4bbb02f398d3601acfd87b09f543d935fc24862c314aaf64c295acdb",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x873f7c77d5489c1990f701e9bb312c103c5ebcdcf0a472db726730814bfd55f3",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xcbe521aea28911fe9983030748028e12541e347b8b6b974d026fa5065c22f0cf",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x4c684fb2618c29743531dec9253ede1b757bda0b323dc2f305e3b50ab1773da7",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xcf834aff4de9992f5da9c443600dad9c6277a8a00de5007842fece51564992db",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x12fe79f1de8aed0ba947cec4dce5d33368d649903cb45a5d3e915cc459e751fc",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x2a027c8b915c3737942f512fc5d26fd15752d0332353b3059de771a35a606c2d",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xc310a0affe2169d1f6feec1c63dbc7f7c62a887fa48795d327d4d2da2d6b111d",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xdf6252854362c3e96fd086d9c3a5397c303d265649aee0b023176bb49cf00d4b",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x3bba4fb6de00dd38df3ad68e51c19fe575a95a296e0632028f101c5199b6f714",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x06d7e7436414c658a33452d28400799f3637e83930dcec39b3bd065dabc6ef04",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x95c1604789c93f41940a7fd9eca11276975a9a65d250b89a247736287dbd2b7e",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x1fe5a53405d00ce2f3e15b214c7486c69cbc5bf165cf9596e86f797f62e81914",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x995e880635f4a7462a420a58527023f946710167ea4c6c093d7d193062a33b01",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xd493c73397952049644c531309df3dd4134bf3db1e64eb6f0b68b016ee0bffde",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x958236266991bc3fe3b77feaacea120f172c0708ad01c7a715b255f218f9313c",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x160c5950a01b88953648ba90ec0a29b0c5383e055d35a7835d905c53a3dda01e",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x1f1aba5bef04b7026ae3cb1cb77987071a8aff9592e785dd99860566ccad83d1",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x0fc5c0d41e5506fdb9434fab4815a4ff671afc834e47a533b3bed7182ece73b0",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xf4a3d0e01bbca6c114954d4a49503fc94dfdbc864bded5530b51a207640d86b5",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x1106418384414ed56cd7cbb9fedc66a02d39b663d580abc618f2d387348354ab",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xc42fc0e22a0f60cc299be80eb0c0ddce83c21c14a3dddd8430628011c3e20d6b",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xeb8c3bebed11e2e4fcd30cbfc2fb3c55c4ca166003c7f7d319e78eaab9747098",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xe8277ef6ba8611bd12dc5a6e7ca4b984423bc0b3828159f83b466fdcf4fe054f",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x4e5bb7e3f552f5ee6ee97db9a9fcf07287aae9a1974e24999690855741121aff",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6e6e556a5685980317cb2afdb628ed4a845b3cbd1c98bdaffd0561cb2c4790fa",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x1ea0a2e88efceccb2dd93e6e5cb89e5421666caeefb1e6fc41b68168373da342",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x725f0d65340c859e0f64e72ca8260220c526c3e0ccde530004160809f6177940",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x9f14d093a2349de08f02fc0fb018dadb449351d0cdb7d0738ff69cc6fef5f299",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x8e1b0ab098c4cc5f632e00b0842b5f825bbd15ded796d4a59880bb724f6c5372",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xe4db1550e3aa78a05e93bfd8fbe21b6eba5cce50dc06688949ab479ebed18048",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x2b6d0af0dc513a15e325703405739057f9de6ef3f99934b957653b8a3fade4c6",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xfeedbf51b4e2338e38171f6e19501327294ab1907ab44cfd2d7e7336c975ace7",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x0788ba222970c7c68a738b0e08fb197e669e61f9b226ceec4cab9b85abe8cceb",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xf72f1d10fc6923f87279ce6c0aef46e372c6652a696f280b0465a301a92f2e26",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xad818ec910def08c70ac519ab0fffa084b4178014a91cd8aa2f882d972a511c1",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x44aad3b853866468161735496a5d9cc961ce5aa872924c5d78673076b1cd95aa",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xd5b4d68432cbbd912130bbb5b93399031ddbb400d8f723c78050574de7533106",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x2881e839d4d562fad5356183e4f6a9d427ba6f475614ce8ef64dbfe557a4a2cc",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6439d63cc57fb68a32ea8ffd8f02496e8abad67292be94904c0b47a4d14ce90d",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x2e2d9f262dcaa4a6ccdb047092f837b0f65ae533b34332428674d3f36308ff83",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xb072f2e88058c147d8ff643694b43a42e36525b7173ce1daf76e6c06170b0e77",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x04e16a79ff928db2fa88619cdd045cdfc7979a61d836c9c9e585b3d6f6d8bc31",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x485e08dc2b6a4b3aeadcb89c3d18a37666dc7d9424961a2091d6b3696792f0f3",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x1a7ee0a7efc70ed7429edef069a1dd001fbff378748d91f17ab1876dc6d10392",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x26a83db7e28838dd9fee6fb7314ae58dcc6aee9a20bf224c386ff5e80f7e4cf2",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x7c5a909b45014e35ddb89697f6be38d08eff30e7c3d3d553033a6efc3b444fdd",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x37acd17a80a5f95728459bfea85cb2e1f64b4c75cf4a4c8dcb61964e26860882",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xd9156f507c701a09d3312e1987383c7c882df50b3127e1adfd74d74052642114",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x00c5a772a58b117f142b2cbc8721b80d145ef7a910043ad08439863d0e78e300",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x03182d3f0956a91c4e4c8f225bbc7975f9434fab042228c7acdc5ec9a32626ef",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xa05f047ddfdad9126624c4496b5d4a59f961ee7c091e7b4e38cee86f1335736f",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xffbbd492e0605a8bb6d490c3cd879e87ff60862b0684160d08fd5711e7a872d3",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xd813751bfb98a51912b8394b5856ae4515be6a9c6e5583e06b41d9255ba6e3c1",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xcba9f95ab34dd13714e23c86a769fa37dc95c6a60a5ab77d3a0cf2a27ebfee03",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x2da3f15ed1a5b41b70338ee26aa63a7e13edce72501e1c16c33f4c7b1049e98e",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x9ba57a23e7fd5ad17da7b9a2f03d4aced2b2fcb51c3e87d4a6c04a58c023f5b1",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x4f6c7b28e3990321849dfe7c35cfcc7d9571cdb33745fd95a28d26cd9db9add3",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x821cdd09deb2f5a7481820cb4f97e2f02d3a47ed3ad7e78e2f2cbc9f85bde9c3",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6b5e14bbfdf21de79c38d3ae41c0a5e7e2ee5f61f4b6e5e6f8d7c9b0a1111111",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x2a1b3c4d5e6f7a8b9c0d1e2f3a4b5c6da7e8f9a0b1c2d3e4f5a2b7c8d9e0f1a2",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x7f1e2d3c4b5a697880919aa3b4c5d6e7f8091a2b3c4d5e6f7a8b9c0d2e2f3a4b",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xe4b1f2a3c4d5e6f708192ba3b4c5d6e7f8091a2b3c4d5e6f7a8b9c0d3e2f3a4b",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d4e2f3a4b5c6d",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xb7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b5c2d3e4f5a6b7c8",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xf1e2d3c4b5a6978809192a3b4c5d6e7f8091a2b3c4d5e6f7a8b9c0d1e2f3a15c",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a216c",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b317d",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c418e",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d519f",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6200",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7211",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8322",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9433",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xa0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a544",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b655",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xc2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c766",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xd3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d877",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xe4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e988",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xa6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabb",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xb7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbcc",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xc8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccdd",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xd9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9cdb1c2d3e4f5aabbccddee",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xe0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xf1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff00",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x12b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff0011",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x23c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff001122",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x34d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff00112233",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x45e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5aabbccddeeff0011223344",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x56e09abb35ff12271fdb38ff8a23e4d4a7396844426a94c4d3af2e8b7a0a2813",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x242a0fb4fde9de0dc2fd42e8db743cbc197ffa2bf6a036ba0bba303df296408b",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x1ce7e9a9e3b6dd3293c9067221ac3260858ce119ecb7ca860eac28b2474c7c9b",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6ab5b7b51f780e8c6c5ddaf65e9badb868811a95c1fd64e86435283074d3149e",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x0fe3716431f8c2e43217c3ca6d25eed87e14d0fbfa9c9ee8ce4cef2e5ec4583c",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x5dafa6a7aabdaa85e2f7e40e0aa7de08be18ea2a37e5bfe11f0ec4e2e9e3f999",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x3a4d9a3f4743de0a3d942b5c6d4a5b7e8f1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xb3f067618ce54bc26a960b660cfc28f9ea0315e2e9a1a855ede1508eb4017376",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x10f2c28f5d6cd8d7b56210b4d5e0cece27e45a30808cd3d3443c05d4275bb008",
+      "chain": "polygon",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xa1b2c3d4e5f6a7b000c9d0e1f2a3b4c56d7e8f90a1b2c3d4e5f6a7b8c9d0e1f2",
+      "chain": "polygon",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x1266a937c2ccd970e5d7929021eed3ec593a95c68a99b4920c2efa226679b430",
+      "chain": "avalanche",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x660837a1640dd9cc0561ab7ff6c85325edebfa17d8b11a3bb94457ba6dcae18c",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xbc01ea37bd2ff8f6aa6afcfbe0406114ff27a01e9aa56102bfa4ad8a0c2f25ee",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xc9bccafdb0cd977556d1f88ac39bf8b455c0275ac1dd4b51d75950fb58bad4c8",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x48e52a12cb297354a2a1c54cbc897cf3772328e7e71f51c9889bb8c5e533a934",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xf8f431b392a50eb997ecae2e35668d6dd4dc8568d002057600d2532e18f36d86",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xce7125b2104e5dd8156357be6febe6ee59ddcbd79ae010166df69487ae17b5bc",
+      "chain": "zksync",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6ce101943b300fe12f18e7bc4c2797d59aa9eab426c10d7914b0362f9278adfa",
+      "chain": "zksync",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x64490459485bf290ef00b360d3ea943fc56bcb364852ac482b772829cf09cad9",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x98f1e234faac8b7f7ceaffe4e8e0581038678d95710b646db45ec3de47e6c3af",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xe4dfc8b8b54eb7e101d59cd9f87f389186b2e8f6e188557ae9dfdbea2b12e703",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x167993d4cc39771923a6cd11d2d6e73a1b68c7464ea3c76ba41fbd32df7a96da",
+      "chain": "polygon",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x7b8d641d76affcc029fd0e0f06ab81ad675b1da21ef79b82e1343016040ba359",
+      "chain": "polygon",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xece4efbe11e59d457cb1359ebdc4efdffdd310f0a82440be03591f2e27d2b59e",
+      "chain": "avalanche",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6baa6332f9a3ed75e727311d6317fb636844d61d9df5e199f9f68711eb632d6f",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x4ec3061724ca9f0b8d400866dd83b92647ad8c943a1c0ae9ae6c9bd1ef789417",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x18e34ce214211afedb6008c0cd00d476ce71222643521dbff5e2b65cdb2ccb80",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6c19762186c9f32c81eb2a79420fc7ad4485aa916cab37ec278b216757bfba0d",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x7f325cf1201422cf7ab6dd06d66136c55b399144f21b70f09a0c799782c5c874",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x8761164b8947a0690b57896a8e7370dd69fe8e9137ce61e0b21ff08581a2ce60",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xf4fc3b638f1a377cf22b729199a9aeb27fc62fe2983a65c4d14b99ee5c5b2328",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x5c1febd5047c2a15c37988b6abd5c8b984236dddf6fd24eed96b0f43951ad2c9",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x5a7462b79d6df0048299c229bdca232ea6dcb97d80cd3b512c28e67db2370d47",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6b378c84aa57097fb5845f285476e33d6832b8090d36d02fe0e1aed909228edd",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x897c2de73dd55d7701e1b69ffb3a17b0f4801ced88b0c75fe1551c5fcce6a979",
+      "chain": "bsc",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x35a0172fb6bd450ceb29aa67dc85221826dfd0b7528375400b4ccf15c1eed0d8",
+      "chain": "zksync",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xa84aa065ce61dbb1eb50ab6ae67fc31a9da50dd2c74eefd561661bfce2f1620c",
+      "chain": "eth",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xcb1a2f5eeb1a767ea5ccbc3665351fadc1af135d12a38c504f8f6eb997e9e603",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xa9ff2b587e2741575daf893864710a5cbb44bb64ccdc487a100fa20741e0f74d",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x57e555328b7def90e1fc2a0f7aa6df8d601a8f15803800a5aaf0a20382f21fbd",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xfaf84cabc3e1b0cf1ff1738dace1b2810f42d98baeea17b146ae032f0bdf82d5",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6caa65b3fc5c8d4c7104574c3a15cd6208f742f9ada7d81ba027b20473137705",
+      "chain": "arbitrum",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6fa6374d43df083679cdab97149af8207cda2471620a06d3f28b115136b8e2c4",
+      "chain": "polygon",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x31957ecc43774d19f54d9968e95c69c882468b46860f921668f2c55fadd51b19",
+      "chain": "polygon",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x0053490215baf541362fc78be0de98e3147f40223238d5b12512b3e26c0a2c2f",
+      "chain": "polygon",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x554c9e4067e3bc0201ba06fc2cfeeacd178d7dd9c69f9b211bc661bb11296fde",
+      "chain": "polygon",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x96d80c609f7a39b45f2bb581c6ba23402c20c2b6cd528317692c31b8d3948328",
+      "chain": "polygon",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x4f37ffecdad598f53b8d5a2d9df98e3c00fbda4328585eb9947a412b5fe17ac5",
+      "chain": "avalanche",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x0ab12913f9232b27b0664cd2d50e482ad6aa896aeb811b53081712f42d54c026",
+      "chain": "avalanche",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x6e9ebcdebbabda04fa9f2e3bc21ea8b2e4fb4bf4f4670cb8483e2f0b2604f451",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x3d6367de5c191204b44b8a5cf975f257472087a9aadc59b5d744ffdef33a520e",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x9312ae377d7ebdf3c7c3a86f80514878deb5df51aad38b6191d55db53e42b7f0",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xca7c1a0fde444e1a68a8c2b8ae3fb76ec384d1f7ae9a50d26f8bfdd37c7a0afe",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xd12016b25d7aef681ade3dc3c9d1a1cc12f35b2c99953ff0e0ee23a59454c4fe",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x5dc519726e1236eb846271f6699e03cdd1a8fd593a2900c71cd2aabbdb7c92e6",
+      "chain": "optimism",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xa618933a0e0ffd0b9f4f0835cc94e523d0941032821692c01aa96cd6f80fc3fd",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xbb837d417b76dd237b4418e1695a50941a69259a1c4dee561ea57d982b9f10ec",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0x8fcdfcded45100437ff94801090355f2f689941dca75de9a702e01670f361c04",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    },
+    {
+      "txn_hash": "0xde903046b5cdf27a5391b771f41e645e9cc670b649f7b87b1524fc4076f45983",
+      "chain": "base",
+      "reason": "no trace bundle in traces-dir"
+    }
+  ]
 }
