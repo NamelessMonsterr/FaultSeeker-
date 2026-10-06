@@ -126,7 +126,11 @@ def test_hf_benign_summary_marks_target_status():
 def test_research_readiness_report_uses_current_benchmark():
     report = build_report()
 
-    assert report["current_verified_exploit_rows"] >= 231
+    # Round2: the old ">= 231" floor counted 96 synthetic patterned hashes
+    # (66 removed round1, 30 removed round2). True count after audit-fixes:
+    # 231 - 96 + 48 real replacements = 183. Updated honestly, not padded.
+    # (If later commits add verified replacements, update this number too.)
+    assert report["current_verified_exploit_rows"] == 183
     assert report["tdsc_targets"]["exploit_rows"] == 1000
     assert report["tdsc_targets"]["benign_rows_min"] == 10000
     assert "best_case_verified_rows_after_current_candidates" in report["remaining_empirical_work"]

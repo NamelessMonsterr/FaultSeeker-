@@ -166,7 +166,10 @@ def test_normalizer_keeps_sstore_only():
     se.storage_events = evs
     normed = se._normalized_storage_events()
     assert len(normed) == 1
-    assert normed[0]['slot'].lower().endswith('aa' * 4)
+    # Round2: EVM SSTORE pops the slot from TOP of stack (stack[-1]).
+    # The fixture stack is ['aa'*32, 'bb'*32], so the slot is 'bb'*32 —
+    # the old 'aa' expectation was wrong; the extractor was right.
+    assert normed[0]['slot'].lower().endswith('bb' * 4)
 
 
 def test_normalizer_backward_compat_no_op_field():
