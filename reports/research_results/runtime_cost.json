@@ -1,7 +1,7 @@
 {
   "generated_by": "benchmark/compute_cost.py (audit-fixes)",
-  "generated_at": "2026-10-06T14:07:45.723978+00:00",
-  "git_commit": "d1c0fe3",
+  "generated_at": "2026-10-06T14:08:24.001466+00:00",
+  "git_commit": "04cb6e8",
   "methodology": "Modeled from the paper \u00a76.7 inputs and CostTracker.DEFAULT_PRICING (local tier = $0). NOT a measured run: no production query log exists in the repo. Replaces the hand-typed runtime_cost.json.",
   "pricing_source": "faultseeker/research/cost_tracker.py: DEFAULT_PRICING",
   "local_tier_pricing_usd_per_1m_tokens": {

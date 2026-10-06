@@ -128,9 +128,10 @@ def test_research_readiness_report_uses_current_benchmark():
 
     # Round2: the old ">= 231" floor counted 96 synthetic patterned hashes
     # (66 removed round1, 30 removed round2). True count: 231 - 96 + 48
-    # (round1 real) + 13 (round2 non-ETH real) = 196. Updated honestly.
-    # (If later commits add verified replacements, update this number too.)
-    assert report["current_verified_exploit_rows"] == 196
+    # (round1 real) + 13 (round2 non-ETH) + 16 (round2 ETH) = 212.
+    # 1 slot (eth Storage Slot Collision) had no verifiable incident;
+    # left empty, not padded. Updated honestly.
+    assert report["current_verified_exploit_rows"] == 212
     assert report["tdsc_targets"]["exploit_rows"] == 1000
     assert report["tdsc_targets"]["benign_rows_min"] == 10000
     assert "best_case_verified_rows_after_current_candidates" in report["remaining_empirical_work"]
