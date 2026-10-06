@@ -36,7 +36,12 @@ class TransactionInteractionGraph:
             slot_id = f"{address}:slot:{slot}"
             self.graph.add_node(address, kind="contract_or_eoa")
             self.graph.add_node(slot_id, kind="storage_slot")
-            self.graph.add_edge(address, slot_id, kind="sstore", depth=event.get("depth", 0))
+            # Round2: storage events carry an op tag ('SSTORE' / 'SLOAD';
+            # missing ⇒ legacy SSTORE). An SLOAD is a read, not a write —
+            # labelling it "sstore" misattributes reads as state changes.
+            op = str(event.get("op") or "SSTORE").upper()
+            kind = "sload" if op == "SLOAD" else "sstore"
+            self.graph.add_edge(address, slot_id, kind=kind, depth=event.get("depth", 0))
 
     def add_token_transfers(self, token_transfer: Dict[str, Any]) -> None:
         for edge in token_transfer.get("edges", []) if isinstance(token_transfer, dict) else []:
@@ -61,6 +66,7 @@ class TransactionInteractionGraph:
         delegate_edges = edge_kinds.get("delegatecall", 0)
         transfer_edges = edge_kinds.get("transfer", 0)
         sstore_edges = edge_kinds.get("sstore", 0)
+        sload_edges = edge_kinds.get("sload", 0)
         anomaly_score = min(1.0, 0.15 * len(cycles) + 0.2 * delegate_edges + 0.1 * transfer_edges + 0.1 * sstore_edges)
         return {
             "node_count": self.graph.number_of_nodes(),
@@ -71,6 +77,7 @@ class TransactionInteractionGraph:
             "delegatecall_edges": delegate_edges,
             "transfer_edges": transfer_edges,
             "storage_slot_edges": sstore_edges,
+            "storage_read_edges": sload_edges,
             "anomaly_score": round(anomaly_score, 4),
             "motifs": self.motifs(cycles),
         }

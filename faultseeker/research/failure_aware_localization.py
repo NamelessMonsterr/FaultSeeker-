@@ -113,13 +113,18 @@ class FailureAwareExploitGraphLocalizer:
         nodes = list(self._iter_trace_nodes(tx_analysis.get("trace", {})))
         nodes.extend(node for node in (tx_analysis.get("flatten_trace", []) or []) if isinstance(node, dict))
         storage_events = tx_analysis.get("storage_events") or []
+        # Round2: storage events now carry op tags ('SSTORE' / 'SLOAD'; missing
+        # ⇒ legacy SSTORE). state_delta measures WRITES — counting SLOAD reads
+        # inflates it. Filter to SSTORE (backward compatible with op-less).
+        write_events = [e for e in storage_events
+                        if isinstance(e, dict) and str(e.get("op") or "SSTORE").upper() == "SSTORE"]
         token_edges = self._token_edges(tx_analysis, token_filter_result)
         max_depth = max([int(self._to_float(node.get("depth", 0))) for node in nodes] or [0])
         delegatecalls = sum(1 for node in nodes if str(node.get("call_type") or node.get("type") or "").lower() == "delegatecall")
         return {
             "trace_entropy": self._trace_entropy(nodes),
             "call_depth": round(min(1.0, max_depth / 16.0), 6),
-            "state_delta": round(min(1.0, len(storage_events) / 12.0), 6),
+            "state_delta": round(min(1.0, len(write_events) / 12.0), 6),
             "token_flow_anomaly": round(min(1.0, len(token_edges) / 10.0), 6),
             "delegatecall_density": round(min(1.0, delegatecalls / max(1, len(nodes))), 6),
             "graph_anomaly": round(float(graph_metrics.get("anomaly_score", 0.0) or 0.0), 6),
