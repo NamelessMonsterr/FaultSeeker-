@@ -271,6 +271,13 @@ _registry = _ChainRegistry()
 
 # ── Public fallback endpoints ──────────────────────────────────────────────────
 
+# ── Private endpoints from environment (audit-fixes) ─────────────────────────
+# SECURITY: a live QuickNode BSC API token was previously hardcoded in the
+# 'bsc' list below. Private endpoints now come from the environment only —
+# never commit tokens to source.
+load_dotenv()
+_BSC_QUICKNODE_URL = (os.environ.get('BSC_QUICKNODE_URL') or '').strip()
+
 _PUBLIC: dict[str, list[tuple[str, int]]] = {
     # ── Ethereum ───────────────────────────────────────────────────────────────
     # NOTE: debug_traceTransaction requires an archive+trace node.
@@ -291,7 +298,9 @@ _PUBLIC: dict[str, list[tuple[str, int]]] = {
     #   - Alchemy BSC: https://bnb-mainnet.g.alchemy.com/v2/<key>
     #   - Ankr with key: https://rpc.ankr.com/bsc/<key>
     'bsc': [
-        ('https://restless-thrilling-darkness.bsc.quiknode.pro/5b30b0da70126411f777c3c8d9730d1998fc7922/', 85),
+        # Private QuickNode endpoint (trace-capable). Set BSC_QUICKNODE_URL
+        # in .env — see .env.example. Omitted when unset.
+        *([(_BSC_QUICKNODE_URL, 85)] if _BSC_QUICKNODE_URL else []),
         ('https://bsc-dataseed1.binance.org',         68),
         ('https://bsc-dataseed2.binance.org',         65),
         ('https://bsc-dataseed1.defibit.io',          62),
@@ -940,10 +949,31 @@ def extract_storage_writes_from_struct_logs(struct_logs: list[dict], root_trace:
 
             if slot:
                 events.append({
+                    'op': 'SSTORE',
                     'address': current_address,
                     'slot': slot,
                     'value_before': value_before,
                     'value_after': value_after,
+                    'pc': entry.get('pc'),
+                    'depth': depth,
+                    'call_id': current_call_id,
+                    'event_index': idx,
+                    'after_external_call': bool(after_external_stack[-1]),
+                })
+
+        # SLOAD extraction (audit-fixes): the replay stage advertises
+        # "SSTORE/SLOAD events" — previously only SSTORE was captured.
+        # SLOADs carry no value_after; consumers that need writes must
+        # filter on op == 'SSTORE'.
+        if op == 'SLOAD':
+            slot = _normalize_word_hex(stack[-1] if len(stack) >= 1 else None)
+            if slot:
+                events.append({
+                    'op': 'SLOAD',
+                    'address': current_address,
+                    'slot': slot,
+                    'value_before': None,
+                    'value_after': None,
                     'pc': entry.get('pc'),
                     'depth': depth,
                     'call_id': current_call_id,
