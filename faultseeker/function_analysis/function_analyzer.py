@@ -68,6 +68,39 @@ class FunctionAnalyzer:
             return nullcontext()
         return self.cost_tracker.stage(name)
 
+    @staticmethod
+    def _tier2_confidence(response, format='json') -> float:
+        """Operational local-confidence signal for θ_gate escalation (audit-fixes).
+
+        Local models report no numeric confidence, so confidence is measured
+        as response validity: 1.0 for a well-formed response, 0.0 otherwise.
+        """
+        if format == 'str':
+            return 1.0 if isinstance(response, str) and response.strip() else 0.0
+        return 1.0 if isinstance(response, dict) and response else 0.0
+
+    def _query_tier2(self, agent, prompt, format='json'):
+        """Query a Tier-2 agent with θ_gate escalation (audit-fixes).
+
+        Queries the local agent first; if the response is invalid, its
+        confidence (0.0) falls below the router's ``confidence_gate`` and the
+        agent is rebuilt on the cloud model for a single retry. Without a
+        router attached this is a plain query.
+        """
+        response = agent.query(prompt, format=format)
+        router = getattr(agent, 'router', None) or self.router
+        if router is not None and router.should_escalate(
+                getattr(agent, 'agent_role', ''),
+                local_confidence=self._tier2_confidence(response, format)):
+            try:
+                escalated = router.escalate_agent(agent)
+                logging.info("Tier-2 θ_gate escalation: retrying '%s' on cloud model",
+                             getattr(agent, 'agent_role', 'tier2'))
+                response = escalated.query(prompt, format=format)
+            except Exception as e:
+                logging.warning("Tier-2 escalation failed (%s); keeping local response", e)
+        return response
+
     def _get_function_call_depth(self, function_call):
         temp = function_call.rsplit('_',1)
         function_name = temp[0].lower()
@@ -193,7 +226,7 @@ class FunctionAnalyzer:
         prompt = self.function_prompts.retrieve_additional_info
         prompt += f"Current available information:{self.function_call_info_summary}\n"
         prompt += f"Additional information to be reorganized:{additional_info}"
-        formatted_additional_info = self.generation_agent.query(prompt)
+        formatted_additional_info = self._query_tier2(self.generation_agent, prompt)
         output = {}
         if 'function_call' in formatted_additional_info:
             function_call = []
@@ -282,10 +315,10 @@ class FunctionAnalyzer:
             function_call_info_summary = self.function_call_info_summary,
             current_understanding = self.understanding_result
         )
-        self.current_task = self.generation_agent.query(task_selection_prompt)
+        self.current_task = self._query_tier2(self.generation_agent, task_selection_prompt)
         count = 0
         while (not isinstance(self.current_task, dict)) and (count < 3):
-            self.current_task = self.generation_agent.query('The task is not in standard JSON format. Please reformat the task into a standard JSON format.')
+            self.current_task = self._query_tier2(self.generation_agent, 'The task is not in standard JSON format. Please reformat the task into a standard JSON format.')
             count += 1
         logging.info(f"Selected task: {self.current_task}")
         return self.current_task   # ← callers use this to detect timeouts (empty = timed out)
@@ -304,10 +337,10 @@ class FunctionAnalyzer:
     def _update_current_understanding(self, is_init=False):
         if is_init:
             understanding_prompt = self.function_prompts.function_call_organization_function_call.format(function_call_info_summary=json.dumps(self.function_call_info_summary))
-            self.understanding_result = self.organization_agent.query(understanding_prompt, format='str')
+            self.understanding_result = self._query_tier2(self.organization_agent, understanding_prompt, format='str')
         else:
             understanding_prompt = self.function_prompts.function_call_organization_function_call.format(function_call_info_summary=json.dumps(self.function_call_info_summary))
-            self.understanding_result = self.organization_agent.query(understanding_prompt, format='str')
+            self.understanding_result = self._query_tier2(self.organization_agent, understanding_prompt, format='str')
         logging.info(f"Current understanding: {self.understanding_result}")
 
     def _update_potentially_vulnerable_function(self):
@@ -316,7 +349,7 @@ class FunctionAnalyzer:
         prompt += "Current task:" + json.dumps(self.current_task)
         prompt += 'Analysis result of current task:' + json.dumps(self.processing_result)
         prompt += 'The following function calls have been confirmed to be vulnerable, if it is in the provided information, please add it to the returned JSON with the predefined format: ' + str(self.cheatsheet)
-        result = self.organization_agent.query(prompt)
+        result = self._query_tier2(self.organization_agent, prompt)
         logging.info(f"Vulnerable function: {result}")
         for key in result:
             try:
@@ -436,7 +469,7 @@ class FunctionAnalyzer:
                 if i % 2 == 0:
                     check_prompt = self.function_prompts.check_analysis_adequacy
                     check_prompt += "Current understanding:" + self.understanding_result
-                    result = self.organization_agent.query(check_prompt, format='str')
+                    result = self._query_tier2(self.organization_agent, check_prompt, format='str')
                     if result and 'yes' in str(result).lower():
                         break
             except Exception:
@@ -527,7 +560,7 @@ class FunctionAnalyzer:
             current_understanding=json.dumps(self.understanding_result),
             potentially_vulnerable_functions=json.dumps(self.potentially_vulnerable_functions)
         )
-        self.ranked_result = self.agent.query(prompt_text)
+        self.ranked_result = self._query_tier2(self.agent, prompt_text)
 
     def _review_function_calls(self):
         self.examined_function_memo = []
@@ -545,7 +578,7 @@ class FunctionAnalyzer:
                 function_call_to_be_inspected = json.dumps(function_call_to_be_inspected_summary),
                 balance_change = json.dumps(self.fundflow_analysis['balance_change'])
             )
-            selected_functions_new = self.agent.query(prompt)
+            selected_functions_new = self._query_tier2(self.agent, prompt)
             if len(selected_functions_new) < len(selected_functions):
                 selected_functions = selected_functions_new
         selected_functions_with_created_contract_in_params = list(self.address_calls_with_created_contract_in_params.keys())
@@ -561,7 +594,7 @@ class FunctionAnalyzer:
             prompt = self.function_prompts.narrow_down_functions_with_created_contracts.format(
                 function_call_to_be_inspected = json.dumps(function_call_to_be_inspected_summary),
             )
-            selected_functions_new = self.agent.query(prompt)
+            selected_functions_new = self._query_tier2(self.agent, prompt)
             if len(selected_functions_new) < len(selected_functions_with_created_contract_in_params):
                 selected_functions_with_created_contract_in_params = selected_functions_new
         
@@ -736,7 +769,7 @@ class FunctionAnalyzer:
                 if i > 0:
                     check_prompt = self.function_prompts.check_analysis_adequacy_alt
                     check_prompt += "Current understanding:" + self.understanding_result
-                    result = self.organization_agent.query(check_prompt, format='str')
+                    result = self._query_tier2(self.organization_agent, check_prompt, format='str')
                     if result and 'yes' in str(result).lower():
                         break
             except Exception:
