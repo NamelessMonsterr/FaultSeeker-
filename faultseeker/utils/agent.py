@@ -66,7 +66,7 @@ JSON_MODE_MODELS = {
 # knobs bound every call; auth/quota failures are re-raised so the console's
 # per-key rotation can engage instead of silently producing empty output.
 LLM_CALL_TIMEOUT_SECS = int(os.getenv('FAULTSEEKER_LLM_TIMEOUT_SECS', '120'))
-LLM_CALL_RETRIES = int(os.getenv('FAULTSEEKER_LLM_RETRIES', '4'))
+LLM_CALL_RETRIES = int(os.getenv('FAULTSEEKER_LLM_RETRIES', '6'))
 # NaraRouter-class routers flap ~30% of calls (429/5xx/slow); give them room.
 LLM_RETRY_BACKOFF_LADDER = [5, 15, 45, 90]
 
@@ -109,6 +109,10 @@ def _llm_call_with_retry(create_client, kwargs, model):
             if attempt > LLM_CALL_RETRIES:
                 raise                  # let the caller rotate keys / fail loudly
             backoff = LLM_RETRY_BACKOFF_LADDER[min(attempt - 1, len(LLM_RETRY_BACKOFF_LADDER) - 1)] + random.uniform(0, 3)
+            # Honor provider hints ("try again in 12.3s") when they exceed the ladder.
+            _m = re.search(r'try again in ([0-9.]+)s', str(e), re.I)
+            if _m:
+                backoff = max(backoff, float(_m.group(1)) + 3)
             print(f"   [!] LLM call to {model} failed ({type(e).__name__}, attempt {attempt}); retrying in {int(backoff)}s...", flush=True)
             time.sleep(backoff)
 
