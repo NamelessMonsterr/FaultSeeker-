@@ -35,6 +35,11 @@ PROVIDER_CONFIG = {
     'qwen-':    ('https://dashscope.aliyuncs.com/compatible-mode/v1',            'DASHSCOPE_API_KEY'),
     # Google Gemini (OpenAI-compatible endpoint)
     'gemini-':  ('https://generativelanguage.googleapis.com/v1beta/openai/',     'GOOGLE_API_KEY'),
+    # NaraRouter / bynara (OpenAI-compatible free router, 7M tokens/day)
+    'agnes':    ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'jev':      ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'laguna':   ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'nemotron': ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
     # Anthropic Claude (NB: not OpenAI-compatible natively — requires anthropic sdk)
     'claude-':  ('https://api.anthropic.com/v1',                                 'ANTHROPIC_API_KEY'),
 }
@@ -400,6 +405,8 @@ class UniversalAgent(AbstractAgent):
         load_dotenv()
         # Auto-detect provider from model prefix
         detected_base_url, env_var = self._detect_provider(model_name)
+        if env_var == 'NARAROUTER_API_KEY':
+            detected_base_url = os.getenv('NARAROUTER_BASE_URL', detected_base_url)
         self.base_url = base_url or detected_base_url
         self.api_key  = api_key  or os.getenv(env_var, '')
         if not self.api_key:
