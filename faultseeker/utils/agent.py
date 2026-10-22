@@ -497,6 +497,8 @@ class UniversalAgent(AbstractAgent):
             detected_base_url = os.getenv('NARAROUTER_BASE_URL', detected_base_url)
         if env_var == 'GROQ_API_KEY':
             detected_base_url = os.getenv('GROQ_BASE_URL', detected_base_url)
+        if env_var == 'OPENAI_API_KEY':
+            detected_base_url = os.getenv('OPENAI_BASE_URL', detected_base_url)
         self.base_url = base_url or detected_base_url
         # Multiple keys in the env var (newline/comma/space separated, .env-style
         # tolerated) rotate round-robin per client creation, so provider
