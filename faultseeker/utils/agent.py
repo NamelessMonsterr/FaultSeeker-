@@ -49,6 +49,46 @@ JSON_MODE_MODELS = {
 }
 
 
+# ── Bounded LLM calls (console demo hardening) ────────────────────────────────
+# Without an explicit client timeout the OpenAI SDK waits ~600s per attempt and
+# retries internally, so one slow provider wedged a whole analysis run. These
+# knobs bound every call; auth/quota failures are re-raised so the console's
+# per-key rotation can engage instead of silently producing empty output.
+LLM_CALL_TIMEOUT_SECS = int(os.getenv('FAULTSEEKER_LLM_TIMEOUT_SECS', '120'))
+LLM_CALL_RETRIES = int(os.getenv('FAULTSEEKER_LLM_RETRIES', '2'))
+
+
+def _llm_call_with_retry(create_client, kwargs, model):
+    """One chat.completions.create with bounded timeout + limited retries.
+
+    Raises on auth/quota/not-found (caller rotates keys or fails fast) and on
+    exhausted transient failures; returns the completion on success.
+    """
+    from openai import (APITimeoutError, APIConnectionError, RateLimitError,
+                        AuthenticationError, PermissionDeniedError, NotFoundError,
+                        BadRequestError)
+    transient = (APITimeoutError, APIConnectionError, RateLimitError)
+    attempt = 0
+    while True:
+        client = create_client()
+        try:
+            return client.chat.completions.create(**kwargs)
+        except (AuthenticationError, PermissionDeniedError, NotFoundError):
+            raise                      # key/model problem: rotation-worthy
+        except BadRequestError as e:
+            msg = str(e).lower()
+            if 'api key' in msg or 'incorrect api key' in msg or 'invalid api key' in msg:
+                raise AuthenticationError(str(e))
+            raise                      # genuine request problem: do not retry
+        except transient:
+            attempt += 1
+            if attempt > LLM_CALL_RETRIES:
+                raise                  # let the caller rotate keys / fail loudly
+            backoff = 5 * attempt
+            print(f"   [!] LLM call to {model} failed (attempt {attempt}); retrying in {backoff}s...", flush=True)
+            time.sleep(backoff)
+
+
 JSON_RETRY_PROMPT = (
     "Your previous response was not valid JSON. "
     "Return ONLY a valid JSON object or array. "
@@ -306,7 +346,6 @@ class GPTAgent(AbstractAgent):
         return [system_prompt] + truncated
 
     def _send_message(self, user_message, temperature=0):
-        client = OpenAI(api_key=self.openai_api_key)
         start_time = time.time()
         try:
             user_message = user_message[:10000]
@@ -320,7 +359,10 @@ class GPTAgent(AbstractAgent):
                 self.model.startswith(p) for p in ('gpt-4o', 'gpt-4.1', 'gpt-4-turbo')
             ):
                 kwargs['response_format'] = {"type": "json_object"}
-            chat_completion = client.chat.completions.create(**kwargs)
+            chat_completion = _llm_call_with_retry(
+                lambda: OpenAI(api_key=self.openai_api_key,
+                               timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
+                kwargs, self.model)
             reply = chat_completion.choices[0].message.content or ""
             self.memory.append({"role": "assistant", "content": reply})
 
@@ -332,6 +374,15 @@ class GPTAgent(AbstractAgent):
 
             return reply
         except Exception as e:
+            # Auth/quota/timeout failures must propagate so the console worker
+            # can rotate to a fallback key; only content-level problems are
+            # swallowed into an empty reply.
+            from openai import (APITimeoutError, APIConnectionError, RateLimitError,
+                                AuthenticationError, PermissionDeniedError, NotFoundError)
+            if isinstance(e, (APITimeoutError, APIConnectionError, RateLimitError,
+                              AuthenticationError, PermissionDeniedError, NotFoundError)):
+                self.memory.append({"role": "assistant", "content": ''})
+                raise
             self.memory.append({"role": "assistant", "content": ''})
             return "An error occurred."
 
@@ -373,7 +424,6 @@ class UniversalAgent(AbstractAgent):
         return [system_prompt] + truncated
 
     def _send_message(self, user_message: str, temperature: float = 0) -> str:
-        client = OpenAI(api_key=self.api_key, base_url=self.base_url)
         start_time = time.time()
         try:
             user_message = user_message[:10000]
@@ -386,7 +436,10 @@ class UniversalAgent(AbstractAgent):
             # Enable JSON mode if model supports it
             if self.model in JSON_MODE_MODELS:
                 kwargs['response_format'] = {"type": "json_object"}
-            chat_completion = client.chat.completions.create(**kwargs)
+            chat_completion = _llm_call_with_retry(
+                lambda: OpenAI(api_key=self.api_key, base_url=self.base_url,
+                               timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
+                kwargs, self.model)
             reply = chat_completion.choices[0].message.content or ""
             self.memory.append({"role": "assistant", "content": reply})
 
@@ -398,6 +451,15 @@ class UniversalAgent(AbstractAgent):
 
             return reply
         except Exception as e:
+            # Auth/quota/timeout failures must propagate so the console worker
+            # can rotate to a fallback key; only content-level problems are
+            # swallowed into an empty reply.
+            from openai import (APITimeoutError, APIConnectionError, RateLimitError,
+                                AuthenticationError, PermissionDeniedError, NotFoundError)
+            if isinstance(e, (APITimeoutError, APIConnectionError, RateLimitError,
+                              AuthenticationError, PermissionDeniedError, NotFoundError)):
+                self.memory.append({"role": "assistant", "content": ''})
+                raise
             self.memory.append({"role": "assistant", "content": ''})
             return "An error occurred."
 

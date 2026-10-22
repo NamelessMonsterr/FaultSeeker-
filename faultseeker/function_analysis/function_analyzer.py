@@ -649,42 +649,97 @@ class FunctionAnalyzer:
                     'current_understanding': self.understanding_result
                 }
         print('functions to be analyzed:', selected_functions)
+
+        # ── Bounded parallel per-function analysis ────────────────────────────
+        # Each function gets its OWN FunctionAnalyzer (own agents / own LLM
+        # conversation memory) so threads never share mutable conversation
+        # state. Read-only inputs (trace, fundflow, memos) are shared by
+        # reference. Auth/quota errors propagate so the console can rotate keys.
+        import os as _os
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        _workers = max(1, int(_os.getenv('FAULTSEEKER_STAGE2_WORKERS', '3')))
+        _AGENT_ATTRS = {'reasoning_agent', 'generation_agent', 'processing_agent',
+                        'organization_agent', 'children_call_filtering_agent', 'agent',
+                        'router', 'cost_tracker',
+                        'task_tree', 'function_call_info_summary', 'current_task',
+                        'processing_result', 'understanding_result',
+                        'potentially_vulnerable_functions', 'children_call_memo_single'}
+
+        def _analyze_single_function(function):
+            temp = function.split('_')
+            function_name = temp[0]
+            address = temp[1]
+            fa = FunctionAnalyzer(model=self.txn_analyzer_model,
+                                  router=self.router,
+                                  cost_tracker=self.cost_tracker)
+            for _k, _v in vars(self).items():
+                if _k not in _AGENT_ATTRS:
+                    setattr(fa, _k, _v)
+            fa.examined_function_memo = list(self.examined_function_memo)
+            appearance_count = self.functions_to_be_inspected[function]['count']
+            function_calls = self.functions_to_be_inspected[function]['calls']
+            related_info = fa._retrieve_related_info(address, function_name)
+            fa.function_call_info_summary = {
+                'function': function_name,
+                'address': address,
+                'appearance_count': appearance_count,
+                'calls': function_calls,
+            }
+            if related_info:
+                fa.function_call_info_summary.update(related_info)
+            fa._retrieve_chidlren_calls_memo_single(function_name, address)
+            fa.function_call_info_summary['high_appearance_count_children_calls'] = fa.select_high_appearance_count_children_calls()
+            fa._function_analysis_init()
+            return function, function_name, {
+                'task_tree': fa.task_tree,
+                'function_call_info_summary': fa.function_call_info_summary,
+                'potentially_vulnerable_functions': fa.potentially_vulnerable_functions,
+                'current_understanding': fa.understanding_result
+            }
+
+        pending_functions = []
         for function in selected_functions:
             if function in self.functions_to_be_inspected:
-                self.task_tree = ''
-                self.function_call_info_summary = {}
-                self.current_task = ''
-                self.processing_result = ''
-                # self.understanding_result = ''
-                temp = function.split('_')
-                function_name = temp[0]
-                address = temp[1]
+                function_name = function.split('_')[0]
                 if function_name in self.examined_function_memo:
                     continue
                 self.examined_function_memo.append(function_name)
+                pending_functions.append(function)
+
+        if _workers > 1 and len(pending_functions) > 1:
+            print(f"         [Stage 2] analyzing {len(pending_functions)} functions with {_workers} parallel workers (per-call timeout + retries on)", flush=True)
+            pool = ThreadPoolExecutor(max_workers=_workers)
+            futs = {}
+            try:
+                for function in pending_functions:
+                    current += 1
+                    print(f"         [{current}/{total_functions}] Analyzing {function.split('_')[0]}...", flush=True)
+                    futs[pool.submit(_analyze_single_function, function)] = function
+                done_count = 0
+                for fut in as_completed(futs):
+                    function = futs[fut]
+                    done_count += 1
+                    try:
+                        function, function_name, analysis_result = fut.result()
+                        self.functions_to_be_inspected[function]['analysis_result'] = analysis_result
+                        n_vuln = len(analysis_result.get('potentially_vulnerable_functions') or {})
+                        print(f"         [done {done_count}/{len(pending_functions)}] {function_name} - {n_vuln} vuln candidate(s)", flush=True)
+                    except Exception as e:
+                        from openai import RateLimitError, AuthenticationError, PermissionDeniedError
+                        if isinstance(e, (RateLimitError, AuthenticationError, PermissionDeniedError)):
+                            pool.shutdown(wait=False, cancel_futures=True)
+                            raise
+                        print(f"         [done {done_count}/{len(pending_functions)}] {function} FAILED: {type(e).__name__}: {str(e)[:160]}", flush=True)
+            finally:
+                pool.shutdown(wait=False, cancel_futures=True)
+        else:
+            for function in pending_functions:
                 current += 1
-                print(f"         [{current}/{total_functions}] Analyzing {function_name}...")
-                appearance_count = self.functions_to_be_inspected[function]['count']
-                function_calls = self.functions_to_be_inspected[function]['calls']
-                # self._retrieve_children_calls(function_calls,function_name)
-                related_info = self._retrieve_related_info(address, function_name)
-                self.function_call_info_summary = {
-                    'function': function_name,
-                    'address': address,
-                    'appearance_count': appearance_count,
-                    'calls': function_calls,
-                }
-                if related_info:
-                    self.function_call_info_summary.update(related_info)
-                self._retrieve_chidlren_calls_memo_single(function_name,address)
-                self.function_call_info_summary['high_appearance_count_children_calls'] = self.select_high_appearance_count_children_calls()
-                self._function_analysis_init()
-                self.functions_to_be_inspected[function]['analysis_result'] = {
-                    'task_tree': self.task_tree,
-                    'function_call_info_summary': self.function_call_info_summary,
-                    'potentially_vulnerable_functions': self.potentially_vulnerable_functions,
-                    'current_understanding': self.understanding_result
-                }
+                print(f"         [{current}/{total_functions}] Analyzing {function.split('_')[0]}...")
+                _t0 = time.time()
+                function, function_name, analysis_result = _analyze_single_function(function)
+                self.functions_to_be_inspected[function]['analysis_result'] = analysis_result
+                print(f"         [done] {function_name} in {int(time.time() - _t0)}s", flush=True)
                 
     def _txn_analysis_init(self):
         self._update_current_understanding(is_init=True)
