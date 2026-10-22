@@ -422,7 +422,7 @@ class FunctionAnalyzer:
             if not task or not str(task).strip():
                 consecutive_timeouts += 1
                 if consecutive_timeouts >= 2:
-                    print("   [!] Model timed out repeatedly -- skipping this function.")
+                    print("   [!] Task selection failed repeatedly (LLM error or unparseable response) -- skipping this function.")
                     break
                 continue
             consecutive_timeouts = 0
@@ -779,7 +779,7 @@ class FunctionAnalyzer:
             if not task or not str(task).strip():
                 consecutive_timeouts += 1
                 if consecutive_timeouts >= 2:
-                    print("   [!] Model timed out repeatedly -- skipping this function.")
+                    print("   [!] Task selection failed repeatedly (LLM error or unparseable response) -- skipping this function.")
                     break
                 continue
             consecutive_timeouts = 0
