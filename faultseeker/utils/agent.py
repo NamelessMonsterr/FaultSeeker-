@@ -428,22 +428,36 @@ class GPTAgent(AbstractAgent):
                                 APIStatusError)
             transient_fail = isinstance(e, (APITimeoutError, APIConnectionError, RateLimitError)) or \
                 (isinstance(e, APIStatusError) and getattr(e, 'status_code', 0) >= 500)
-            if transient_fail:
+            # With a fallback configured, auth/not-found on the primary also fail over
+            # (e.g. router rejects the key or renamed the model).
+            failoverable = transient_fail or isinstance(e, (AuthenticationError, PermissionDeniedError, NotFoundError))
+            if failoverable:
                 fb = os.getenv('FAULTSEEKER_LLM_FALLBACK_MODEL', '').strip()
                 if fb and fb != self.model:
-                    print(f"   [!] {self.model} exhausted retries ({type(e).__name__}); trying fallback model {fb}", flush=True)
-                    try:
-                        fb_kwargs = dict(messages=self._truncate_history(self.memory),
-                                         model=fb, temperature=0)
-                        cc = _llm_call_with_retry(
-                            lambda: OpenAI(api_key=self._next_api_key(), base_url=self.base_url,
-                                           timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
-                            fb_kwargs, fb)
-                        reply = cc.choices[0].message.content or ""
-                        self.memory.append({"role": "assistant", "content": reply})
-                        return reply
-                    except Exception as fb_e:  # noqa: BLE001
-                        print(f"   [!] fallback model {fb} also failed ({type(fb_e).__name__})", flush=True)
+                    # Provider-aware fallback: resolve the fallback's OWN endpoint
+                    # and keys (may be a different provider than the primary).
+                    fb_base, fb_env = self._detect_provider(fb)
+                    if fb_env == 'NARAROUTER_API_KEY':
+                        fb_base = os.getenv('NARAROUTER_BASE_URL', fb_base)
+                    if fb_env == 'GROQ_API_KEY':
+                        fb_base = os.getenv('GROQ_BASE_URL', fb_base)
+                    fb_keys = _parse_api_keys(os.getenv(fb_env, ''))
+                    if not fb_keys:
+                        print(f"   [!] fallback model {fb} has no key ({fb_env}); cannot fail over", flush=True)
+                    else:
+                        print(f"   [!] {self.model} exhausted retries ({type(e).__name__}); failing over to {fb} on its own provider", flush=True)
+                        try:
+                            fb_kwargs = dict(messages=self._truncate_history(self.memory),
+                                             model=fb, temperature=0)
+                            cc = _llm_call_with_retry(
+                                lambda: OpenAI(api_key=fb_keys[0], base_url=fb_base,
+                                               timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
+                                fb_kwargs, fb)
+                            reply = cc.choices[0].message.content or ""
+                            self.memory.append({"role": "assistant", "content": reply})
+                            return reply
+                        except Exception as fb_e:  # noqa: BLE001
+                            print(f"   [!] fallback model {fb} also failed ({type(fb_e).__name__})", flush=True)
                 self.memory.append({"role": "assistant", "content": ''})
                 raise
             if isinstance(e, (AuthenticationError, PermissionDeniedError, NotFoundError)):
