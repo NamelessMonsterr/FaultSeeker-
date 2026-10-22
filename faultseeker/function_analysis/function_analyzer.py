@@ -323,6 +323,19 @@ class FunctionAnalyzer:
         prompt += 'The following function calls have been confirmed to be vulnerable, if it is in the provided information, please add it to the returned JSON with the predefined format: ' + str(self.cheatsheet)
         result = self.organization_agent.query(prompt)
         logging.info(f"Vulnerable function: {result}")
+        # Tolerate wrapper shapes ({"vulnerable_functions": {...}}, {"functions": [...]})
+        # instead of silently dropping them below.
+        if isinstance(result, dict) and len(result) == 1:
+            _only = next(iter(result.values()))
+            if isinstance(_only, dict) and 'evidence' not in _only:
+                result = _only
+            elif isinstance(_only, list):
+                _unwrapped = {}
+                for _item in _only:
+                    if isinstance(_item, dict) and 'name' in _item:
+                        _unwrapped[_item['name']] = {k: v for k, v in _item.items() if k != 'name'}
+                if _unwrapped:
+                    result = _unwrapped
         for key in result:
             try:
                 evidence = ''
@@ -343,8 +356,8 @@ class FunctionAnalyzer:
                     else:
                         self.potentially_vulnerable_functions[key]['confidence_score'].append(confidence_score)
                         self.potentially_vulnerable_functions[key]['evidence'].append(evidence)
-            except Exception:
-                pass
+            except Exception as _reg_err:
+                print(f"   [!] dropping unparseable vuln candidate {str(key)[:80]!r}: {type(_reg_err).__name__} {_reg_err}", flush=True)
     
     def _update_children_call_memo(self, function_call, function_name=''):
         for i in function_call:

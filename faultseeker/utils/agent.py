@@ -277,6 +277,7 @@ class AbstractAgent(abc.ABC):
         is not valid JSON. On each retry, inject a correction prompt.
         """
         result_raw = self._send_message(user_message, temperature)
+        print(f"   [dbg] LLM raw reply ({self.model}): {str(result_raw)[:300]!r}", flush=True)
         retries = 0
         while retries <= max_retries:
             try:
