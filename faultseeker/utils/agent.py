@@ -80,12 +80,12 @@ def _llm_call_with_retry(create_client, kwargs, model):
             if 'api key' in msg or 'incorrect api key' in msg or 'invalid api key' in msg:
                 raise AuthenticationError(str(e))
             raise                      # genuine request problem: do not retry
-        except transient:
+        except transient as e:
             attempt += 1
             if attempt > LLM_CALL_RETRIES:
                 raise                  # let the caller rotate keys / fail loudly
             backoff = 5 * attempt
-            print(f"   [!] LLM call to {model} failed (attempt {attempt}); retrying in {backoff}s...", flush=True)
+            print(f"   [!] LLM call to {model} failed ({type(e).__name__}, attempt {attempt}); retrying in {backoff}s...", flush=True)
             time.sleep(backoff)
 
 
