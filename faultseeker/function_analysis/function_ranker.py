@@ -121,7 +121,8 @@ class FunctionRanker:
                 address_calls_with_created_contract_in_params[key]['calls'].append({
                     'gas': call['gas'],
                     'address': call['address'],
-                    'params': call['params'] if len(call['params']) < 200 else f"{call['params'][:200]}...",
+                    'params': call['params'] if len(call['params']) < 2000 else f"{call['params'][:2000]}...",
+                    'params_hash': __import__('hashlib').sha1(str(call['params']).encode()).hexdigest()[:12],
                     'depth': call['depth']
                 })
                 if call['address'] not in address_calls_with_created_contract_in_params[key]['address']:
@@ -152,7 +153,8 @@ class FunctionRanker:
                         functions_to_be_inspected[key]['count'] += 1
                         functions_to_be_inspected[key]['calls'].append({
                             'gas': call['gas'],
-                            'params': call['params'] if len(call['params']) < 200 else f"{call['params'][:200]}...",
+                            'params': call['params'] if len(call['params']) < 2000 else f"{call['params'][:2000]}...",
+                    'params_hash': __import__('hashlib').sha1(str(call['params']).encode()).hexdigest()[:12],
                             'depth': call['depth']
                         })
 

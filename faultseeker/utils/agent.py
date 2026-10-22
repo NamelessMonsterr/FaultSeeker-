@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 # ── Local model tuning constants ──────────────────────────────────────────────
-LOCAL_MODEL_TIMEOUT_SECS = 2       # Hard timeout per Ollama call (reduced for fast fail-fast when offline)
+LOCAL_MODEL_TIMEOUT_SECS = int(os.getenv('FAULTSEEKER_LOCAL_MODEL_TIMEOUT_SECS', '600'))  # per Ollama call; 2s was guaranteed-failure for any real local inference
 LOCAL_MODEL_NUM_CTX      = 4096    # Explicit context window for Ollama
 LOCAL_MODEL_MAX_PROMPT   = 6000    # Truncate prompts longer than this (chars)
 LOCAL_MODEL_MAX_TURNS    = 2       # History turns to keep for local models
@@ -160,7 +160,17 @@ class AbstractAgent(abc.ABC):
     ):
         self.model = model_name
         self.memory = []
+        self._memory_max_pairs = int(os.getenv('FAULTSEEKER_MEMORY_MAX_PAIRS', '20'))
         self._init_resources(task)
+
+    def _append_memory(self, message):
+        # Stored memory is capped (system prompt + last N pairs); only the copy
+        # SENT to the provider was truncated before, so long runs retained every
+        # prompt and reply forever -> slow memory growth on 512MB workers.
+        self.memory.append(message)
+        keep = self._memory_max_pairs * 2
+        if len(self.memory) > 1 + keep:
+            self.memory = [self.memory[0]] + self.memory[-keep:]
 
     def _init_resources(self, task):
         system_message = {
@@ -328,11 +338,13 @@ class AbstractAgent(abc.ABC):
                     print(f"[!] LLM response was not valid JSON after {max_retries} retries; last reply: {str(result_raw)[:200]!r}", flush=True)
                     return {}
                 logger.debug("JSON retry %d/%d", retries, max_retries)
-                result_raw = self._send_message(JSON_RETRY_PROMPT, 0.0)  # Force temp=0 on retries
+                result_raw = self._send_message(
+                    JSON_RETRY_PROMPT + "\n\nOriginal request - respond to THIS with valid JSON only:\n" + user_message[:4000],
+                    0.0)  # Force temp=0 on retries; re-include the request because history truncation drops it
 
     def query(self, user_message: str, temperature=0, format='json') -> Any:
         if format == 'str':
-            return self._send_message(user_message, temperature)
+            return self._send_message(user_message, temperature, force_json=False)
 
         # Use retry-enabled query for JSON formats
         try:
@@ -354,9 +366,13 @@ class OllmaAgent(AbstractAgent):
         truncated = message_pairs[-(max_turns * 2):]
         return [system_prompt] + truncated
 
-    def _send_message(self, user_message: str, temperature=0.0) -> str:
+    def _send_message(self, user_message: str, temperature=0.0, force_json=True) -> str:
         # Cap prompt length so local model context window isn't blown out
         start_time = time.time()
+        _prev = getattr(self, '_inflight_thread', None)
+        if _prev is not None and _prev.is_alive():
+            print(f"   [!] Local model '{self.model}' still busy with a previous call; failing fast instead of stacking leaked inference threads.", flush=True)
+            return ''
         if len(user_message) > LOCAL_MODEL_MAX_PROMPT:
             logger.warning(
                 "Prompt truncated: original length %d chars exceeds LOCAL_MODEL_MAX_PROMPT=%d",
@@ -364,7 +380,7 @@ class OllmaAgent(AbstractAgent):
             )
             user_message = user_message[:LOCAL_MODEL_MAX_PROMPT] + "\n[TRUNCATED FOR LOCAL MODEL]"
 
-        self.memory.append({"role": "user", "content": user_message})
+        self._append_memory({"role": "user", "content": user_message})
         result_container = [None]
         error_container  = [None]
         raw_response_container = [None]
@@ -386,25 +402,26 @@ class OllmaAgent(AbstractAgent):
 
         t = threading.Thread(target=_call, daemon=True)
         t.start()
+        self._inflight_thread = t
         t.join(timeout=LOCAL_MODEL_TIMEOUT_SECS)
 
         dur_ms = (time.time() - start_time) * 1000.0
 
         if t.is_alive():
             print(f"\n   [!] Local model '{self.model}' timed out after {LOCAL_MODEL_TIMEOUT_SECS}s. Returning empty.")
-            self.memory.append({"role": "assistant", "content": ""})
+            self._append_memory({"role": "assistant", "content": ""})
             self._record_router_query(len(user_message), 0, dur_ms)
             return ""
 
         if error_container[0]:
             err = error_container[0]
             print(f"   [!] Local model '{self.model}' error: {type(err).__name__}: {err}")
-            self.memory.append({"role": "assistant", "content": ""})
+            self._append_memory({"role": "assistant", "content": ""})
             self._record_router_query(len(user_message), 0, dur_ms)
             return ""
 
         assistant_response = result_container[0] or ""
-        self.memory.append({"role": "assistant", "content": assistant_response})
+        self._append_memory({"role": "assistant", "content": assistant_response})
 
         raw_resp = raw_response_container[0]
         inp_tok = raw_resp.get('prompt_eval_count') if isinstance(raw_resp, dict) else None
@@ -416,7 +433,7 @@ class OllmaAgent(AbstractAgent):
     def query(self, user_message: str, temperature=0.0, format='json') -> Any:
         """Override with local-model tuned settings: lower temp, more retries."""
         if format == 'str':
-            return self._send_message(user_message, temperature)
+            return self._send_message(user_message, temperature, force_json=False)
         try:
             return self._query_with_json_retry(
                 user_message, temperature=0.0,
@@ -433,6 +450,8 @@ class GPTAgent(AbstractAgent):
     def __init__(self, task, model_name):
         load_dotenv()
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not self.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is not set - GPTAgent cannot run without it (multi-key lists are only supported by UniversalAgent)")
         super().__init__(task, model_name=model_name)
 
     def _truncate_history(self, history, max_turns=1):
@@ -441,26 +460,26 @@ class GPTAgent(AbstractAgent):
         truncated = message_pairs[-(max_turns * 2):]
         return [system_prompt] + truncated
 
-    def _send_message(self, user_message, temperature=0):
+    def _send_message(self, user_message, temperature=0, force_json=True):
         start_time = time.time()
         try:
             user_message = user_message[:10000]
-            self.memory.append({"role": "user", "content": user_message})
+            self._append_memory({"role": "user", "content": user_message})
             kwargs = dict(
                 messages=self._truncate_history(self.memory),
                 model=self.model,
                 temperature=temperature,
             )
-            if self.model in JSON_MODE_MODELS or any(
+            if force_json and (self.model in JSON_MODE_MODELS or any(
                 self.model.startswith(p) for p in ('gpt-4o', 'gpt-4.1', 'gpt-4-turbo')
-            ):
+            )):
                 kwargs['response_format'] = {"type": "json_object"}
             chat_completion = _llm_call_with_retry(
                 lambda: OpenAI(api_key=self.openai_api_key,
                                timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
                 kwargs, self.model)
             reply = chat_completion.choices[0].message.content or ""
-            self.memory.append({"role": "assistant", "content": reply})
+            self._append_memory({"role": "assistant", "content": reply})
 
             dur_ms = (time.time() - start_time) * 1000.0
             usage = getattr(chat_completion, 'usage', None)
@@ -504,7 +523,7 @@ class GPTAgent(AbstractAgent):
                                                timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
                                 fb_kwargs, fb)
                             reply = cc.choices[0].message.content or ""
-                            self.memory.append({"role": "assistant", "content": reply})
+                            self._append_memory({"role": "assistant", "content": reply})
                             return reply
                         except Exception as fb_e:  # noqa: BLE001
                             print(f"   [!] fallback model {fb} also failed ({type(fb_e).__name__})", flush=True)
@@ -573,25 +592,25 @@ class UniversalAgent(AbstractAgent):
         truncated = message_pairs[-(max_turns * 2):]
         return [system_prompt] + truncated
 
-    def _send_message(self, user_message: str, temperature: float = 0) -> str:
+    def _send_message(self, user_message: str, temperature: float = 0, force_json=True) -> str:
         start_time = time.time()
         try:
             user_message = user_message[:10000]
-            self.memory.append({"role": "user", "content": user_message})
+            self._append_memory({"role": "user", "content": user_message})
             kwargs = dict(
                 messages=self._truncate_history(self.memory),
                 model=self.model,
                 temperature=temperature,
             )
             # Enable JSON mode if model supports it
-            if self.model in JSON_MODE_MODELS:
+            if force_json and self.model in JSON_MODE_MODELS:
                 kwargs['response_format'] = {"type": "json_object"}
             chat_completion = _llm_call_with_retry(
                 lambda: OpenAI(api_key=self._next_api_key(), base_url=self.base_url,
                                timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
                 kwargs, self.model)
             reply = chat_completion.choices[0].message.content or ""
-            self.memory.append({"role": "assistant", "content": reply})
+            self._append_memory({"role": "assistant", "content": reply})
 
             dur_ms = (time.time() - start_time) * 1000.0
             usage = getattr(chat_completion, 'usage', None)

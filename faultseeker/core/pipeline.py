@@ -40,7 +40,9 @@ class FaultSeekerPipeline:
         txn_hash = matches[0]
 
         # Determine chain from URL (Gap 5: Multi-Chain — expanded from 2 to 8 chains)
-        txn_link_lower = txn_link.lower()
+        from urllib.parse import urlparse
+        _host = (urlparse(txn_link if '://' in txn_link else 'https://' + txn_link).hostname or '').lower()
+        txn_link_lower = _host or txn_link.lower()  # match chain keywords against the hostname only
         chain_map = [
             ('bscscan', 'bsc'),
             ('bsc', 'bsc'),

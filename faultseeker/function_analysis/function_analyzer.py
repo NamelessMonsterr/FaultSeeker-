@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import json
 import logging
 import networkx as nx
@@ -378,8 +379,7 @@ class FunctionAnalyzer:
             if (i['function'] == function_name) and (i['call_type'] == 'delegatecall'):
                 self._update_children_call_memo(i['children'])
             elif i['type'] not in ['return']:
-                ii = deepcopy(i)
-                del ii['children']
+                ii = {k: v for k, v in i.items() if k != 'children'}  # shallow: deepcopy(i) copied the whole subtree per node -> O(N^2) on chains
                 key = f"{i['function']}::{i['address']}"
                 if key not in self.children_call_memo_single:
                     self.children_call_memo_single[key] = {
@@ -440,7 +440,9 @@ class FunctionAnalyzer:
 
         # Cloud models need fewer iterations than local; 3 passes is plenty.
         is_cloud = any(self.txn_analyzer_model.startswith(p)
-                       for p in ('gpt-', 'gemini-', 'grok-', 'qwen-', 'qwen/', 'claude-', 'o1-', 'o3-', 'o4-'))
+                       for p in ('gpt-', 'gemini-', 'grok-', 'qwen-', 'qwen/', 'claude-', 'o1-', 'o3-', 'o4-',
+                                 'agnes', 'jev', 'laguna', 'nemotron', 'minimax', 'llama-', 'openai/', 'allam-',
+                                 'z-ai/', 'deepseek-ai/', 'nvidia/', 'gla/'))
         max_iterations = 3 if is_cloud else 8
         MAX_FUNCTION_SECS = 480   # 8-min hard wall-clock cap per function
 
@@ -474,7 +476,7 @@ class FunctionAnalyzer:
                     check_prompt = self.function_prompts.check_analysis_adequacy
                     check_prompt += "Current understanding:" + self.understanding_result
                     result = self.organization_agent.query(check_prompt, format='str')
-                    if result and 'yes' in str(result).lower():
+                    if result and re.fullmatch(r'(?i)\s*yes[\s.!]*', str(result)):
                         break
             except Exception:
                 if self.potentially_vulnerable_functions:
@@ -794,7 +796,8 @@ class FunctionAnalyzer:
                     futs[pool.submit(_analyze_single_function, function)] = function
                 done_count = 0
                 failed_count = 0
-                for fut in as_completed(futs):
+                _stage2_budget = int(os.getenv('FAULTSEEKER_STAGE2_SECS', '3600'))
+                for fut in as_completed(futs, timeout=_stage2_budget):
                     function = futs[fut]
                     done_count += 1
                     try:
@@ -844,7 +847,9 @@ class FunctionAnalyzer:
 
         import time as _time
         is_cloud = any(self.txn_analyzer_model.startswith(p)
-                       for p in ('gpt-', 'gemini-', 'grok-', 'qwen-', 'qwen/', 'claude-', 'o1-', 'o3-', 'o4-'))
+                       for p in ('gpt-', 'gemini-', 'grok-', 'qwen-', 'qwen/', 'claude-', 'o1-', 'o3-', 'o4-',
+                                 'agnes', 'jev', 'laguna', 'nemotron', 'minimax', 'llama-', 'openai/', 'allam-',
+                                 'z-ai/', 'deepseek-ai/', 'nvidia/', 'gla/'))
         txn_iters = 2 if is_cloud else 3
         fn_start = _time.time()
         MAX_FUNCTION_SECS = 480
@@ -873,7 +878,7 @@ class FunctionAnalyzer:
                     check_prompt = self.function_prompts.check_analysis_adequacy_alt
                     check_prompt += "Current understanding:" + self.understanding_result
                     result = self.organization_agent.query(check_prompt, format='str')
-                    if result and 'yes' in str(result).lower():
+                    if result and re.fullmatch(r'(?i)\s*yes[\s.!]*', str(result)):
                         break
             except Exception:
                 if self.potentially_vulnerable_functions:
@@ -924,6 +929,15 @@ class FunctionAnalyzer:
                 'confidence': self.rule_confidence,
                 'source': 'rule_classifier',
                 'signals': self.signals_raw,
+                # Deterministic attribution targets: the ranker's top candidate
+                # function@address ids, so the LLM can anchor a finding instead of
+                # returning nothing attributable.
+                'candidate_functions': [
+                    k for k, _ in sorted(
+                        (ranking_result.functions_to_be_inspected or {}).items(),
+                        key=lambda kv: -(kv[1].get('count', 0) if isinstance(kv[1], dict) else 0)
+                    )[:5]
+                ],
             })
 
         # Store ranking results
