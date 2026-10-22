@@ -40,6 +40,7 @@ PROVIDER_CONFIG = {
     'jev':      ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
     'laguna':   ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
     'nemotron': ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'minimax':  ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
     # Anthropic Claude (NB: not OpenAI-compatible natively — requires anthropic sdk)
     'claude-':  ('https://api.anthropic.com/v1',                                 'ANTHROPIC_API_KEY'),
 }
