@@ -1,3 +1,4 @@
+import sys
 import json
 import logging
 import networkx as nx
@@ -19,6 +20,9 @@ from faultseeker.forensics.result import extract_reentrancy_analysis, compute_pr
 from faultseeker.research.cost_tracker import CostTracker
 from contextlib import nullcontext
 from typing import Optional
+
+
+sys.setrecursionlimit(20000)  # deep exploit traces walked recursively below
 
 
 class FunctionAnalyzer:
@@ -369,8 +373,13 @@ class FunctionAnalyzer:
                 if function.lower() not in lower_keys:
                     continue
                 function = keys[lower_keys.index(function.lower())]
+            # Walk the trace by reference (never deepcopy it): the memo update
+            # below only reads the trace and deepcopies the single node it
+            # stores, so results are identical - a per-appearance full-trace
+            # deepcopy was what spiked memory hard enough to OOM-kill the demo
+            # worker on Render's 512MB free tier (two silent deaths).
             for function_call in self.functions_to_be_inspected[function]['calls']:
-                current_output = deepcopy(self.trace)
+                current_output = self.trace
                 for d in function_call['depth']:
                     current_output = current_output[d]['children']
                     self._update_children_call_memo(current_output, function.split('_')[0])
@@ -602,7 +611,7 @@ class FunctionAnalyzer:
                     self.examined_function_memo.append(f['function'])
                     related_info = self._retrieve_related_info(f['address'], f['function'])
                     if related_info:
-                        current_output = deepcopy(self.trace)
+                        current_output = self.trace  # reference, not deepcopy (read-only below)
                         for d in f['depth']:
                             current_output = current_output[d]['children']
                         self._update_children_call_memo(current_output, f['function'])
