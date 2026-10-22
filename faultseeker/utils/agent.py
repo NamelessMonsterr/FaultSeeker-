@@ -378,7 +378,7 @@ class OllmaAgent(AbstractAgent):
                 "Prompt truncated: original length %d chars exceeds LOCAL_MODEL_MAX_PROMPT=%d",
                 len(user_message), LOCAL_MODEL_MAX_PROMPT,
             )
-            user_message = user_message[:LOCAL_MODEL_MAX_PROMPT] + "\n[TRUNCATED FOR LOCAL MODEL]"
+            user_message = user_message[:LOCAL_MODEL_MAX_PROMPT-2000] + "\n...[middle truncated for local model]...\n" + user_message[-2000:]
 
         self._append_memory({"role": "user", "content": user_message})
         result_container = [None]
@@ -463,7 +463,8 @@ class GPTAgent(AbstractAgent):
     def _send_message(self, user_message, temperature=0, force_json=True):
         start_time = time.time()
         try:
-            user_message = user_message[:10000]
+            if len(user_message) > 10000:
+                user_message = user_message[:8000] + "\n...[middle truncated to fit context window]...\n" + user_message[-2000:]
             self._append_memory({"role": "user", "content": user_message})
             kwargs = dict(
                 messages=self._truncate_history(self.memory),
@@ -595,7 +596,8 @@ class UniversalAgent(AbstractAgent):
     def _send_message(self, user_message: str, temperature: float = 0, force_json=True) -> str:
         start_time = time.time()
         try:
-            user_message = user_message[:10000]
+            if len(user_message) > 10000:
+                user_message = user_message[:8000] + "\n...[middle truncated to fit context window]...\n" + user_message[-2000:]
             self._append_memory({"role": "user", "content": user_message})
             kwargs = dict(
                 messages=self._truncate_history(self.memory),

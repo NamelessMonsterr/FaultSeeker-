@@ -90,17 +90,23 @@ class FunctionAnalyzer:
         
     def _retrieve_function_call_by_depth(self, depth , function_name, get_children=False):
         depth_temp = depth[:-1]
-        current = deepcopy(self.trace)
+        current = self.trace  # walk by reference; only the returned node is copied below
         for d in depth_temp:
             current = current[d]['children']
         if get_children:
             output = []
-            for c in current[depth[-1]]['children']:
-                if c['function']:
-                    if (c['function'] == function_name) and (c['call_type'] == 'delegatecall'):
-                        output.extend(deepcopy(c['children']))
-                    elif c['type'] not in ['return']:
-                        output.append(deepcopy(c))      
+            def _collect_named(nodes):
+                for c in nodes:
+                    if c['function']:
+                        if (c['function'] == function_name) and (c['call_type'] == 'delegatecall'):
+                            output.extend(deepcopy(c['children']))
+                        elif c['type'] not in ['return']:
+                            output.append(deepcopy(c))
+                    elif c.get('children'):
+                        # nameless frame (undecoded selector / fallback): named
+                        # descendants can still carry the exploit - descend
+                        _collect_named(c['children'])
+            _collect_named(current[depth[-1]]['children'])
             for c in output:                    
                 c['children'] = [f"[{child['call_type']}]{child['address']}::{child['function']}({child['params']})" for child in c['children'] if child['function']]
             return output
@@ -161,7 +167,7 @@ class FunctionAnalyzer:
         else:
             function_name = function_call[1]
             address = function_call[0]
-        if ('function' in self.function_call_info_summary) and (function_name == self.function_call_info_summary['function']):
+        if ('function' in self.function_call_info_summary) and (function_name == self.function_call_info_summary['function']) and (not address or 'address' not in self.function_call_info_summary or str(address).lower() == str(self.function_call_info_summary.get('address', '')).lower()):
             if 'calls' not in self.current_task:
                 param_memo = []
                 for call in self.function_call_info_summary['calls']:
@@ -183,7 +189,7 @@ class FunctionAnalyzer:
     def _retrieve_children_calls(self, function_name, address):
         calls = []
         function_calls = []
-        if ('function' in self.function_call_info_summary) and (function_name == self.function_call_info_summary['function']):
+        if ('function' in self.function_call_info_summary) and (function_name == self.function_call_info_summary['function']) and (not address or 'address' not in self.function_call_info_summary or str(address).lower() == str(self.function_call_info_summary.get('address', '')).lower()):
             calls = self.function_call_info_summary['calls']
         else:
             key = f"{function_name}::{address}".lower()
@@ -229,12 +235,6 @@ class FunctionAnalyzer:
                 if f'{function_name}::{address}' in self.function_call_info_summary['high_appearance_count_children_calls']:
                     key_list = list(self.function_call_info_summary['high_appearance_count_children_calls'].keys())
                     index = key_list.index(f'{function_name}::{address}')
-                    if index + 1 < len(key_list):
-                        next_key = key_list[index + 1]
-                        next_function_name = next_key.split('::')[0]
-                        next_address = next_key.split('::')[1]
-                        if next_function_name == function_name:
-                            address = next_address
                 retrieved_source_code = self._retrieve_source_code(address, function_name)
                 source_code[f'{function_name}_{address}'] = retrieved_source_code if retrieved_source_code else 'no source code found, proceed to other analysis for other functions'
             else:
@@ -248,12 +248,6 @@ class FunctionAnalyzer:
                     if f'{function_name}::{address}' in self.function_call_info_summary['high_appearance_count_children_calls']:
                         key_list = list(self.function_call_info_summary['high_appearance_count_children_calls'].keys())
                         index = key_list.index(f'{function_name}::{address}')
-                        if index + 1 < len(key_list):
-                            next_key = key_list[index + 1]
-                            next_function_name = next_key.split('::')[0]
-                            next_address = next_key.split('::')[1]
-                            if next_function_name == function_name:
-                                address = next_address
                     retrieved_source_code = self._retrieve_source_code(address, function_name)
                     source_code[f'{function_name}_{address}'] = retrieved_source_code if retrieved_source_code else 'no source code found, proceed to other analysis'
             if source_code:
@@ -315,6 +309,8 @@ class FunctionAnalyzer:
             self.understanding_result = self.organization_agent.query(understanding_prompt, format='str')
         else:
             understanding_prompt = self.function_prompts.function_call_organization_function_call.format(function_call_info_summary=json.dumps(self.function_call_info_summary))
+            understanding_prompt += "\nLatest processing result:\n" + str(self.processing_result)[:2000]
+            understanding_prompt += "\nPrevious understanding:\n" + str(self.understanding_result)[:2000]
             self.understanding_result = self.organization_agent.query(understanding_prompt, format='str')
         logging.info(f"Current understanding: {self.understanding_result}")
 
@@ -492,6 +488,8 @@ class FunctionAnalyzer:
         contract_info = self.contract_info
         if address not in self.contract_info:
             contract_info = ContractDownloader(self.analysis_result.chain,[address]).run()
+            if isinstance(contract_info, dict):
+                self.contract_info.update(contract_info)  # cache: previously re-downloaded on every call
         if address in contract_info:
             if function_name in contract_info[address]:
                 source_code_list = contract_info[address][function_name]
@@ -736,7 +734,7 @@ class FunctionAnalyzer:
         # reference. Auth/quota errors propagate so the console can rotate keys.
         import os as _os
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        _workers = max(1, int(_os.getenv('FAULTSEEKER_STAGE2_WORKERS', '3')))
+        _workers = min(4, max(1, int(_os.getenv('FAULTSEEKER_STAGE2_WORKERS', '3'))))  # hard cap: each worker spikes memory on 512MB
         _AGENT_ATTRS = {'reasoning_agent', 'generation_agent', 'processing_agent',
                         'organization_agent', 'children_call_filtering_agent', 'agent',
                         'router', 'cost_tracker',

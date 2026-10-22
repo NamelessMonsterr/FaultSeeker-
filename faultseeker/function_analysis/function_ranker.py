@@ -161,6 +161,10 @@ class FunctionRanker:
         # Fallback: if no functions found, use function_call_loc_memo
         if len(functions_to_be_inspected) == 0:
             for function_call in tx_analysis['function_call_loc_memo']:
+                if '::' in function_call:
+                    _fb_addr = function_call.rsplit('::', 1)[1]
+                    if _fb_addr not in address_list:
+                        address_list.append(_fb_addr)  # was empty: source downloads never ran for fallback functions
                 function_call_key = function_call.replace('::', '_')
                 function_call_value = {
                     'count': len(tx_analysis['function_call_loc_memo'][function_call]),
