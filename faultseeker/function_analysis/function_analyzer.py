@@ -403,7 +403,7 @@ class FunctionAnalyzer:
 
         # Cloud models need fewer iterations than local; 3 passes is plenty.
         is_cloud = any(self.txn_analyzer_model.startswith(p)
-                       for p in ('gpt-', 'gemini-', 'grok-', 'qwen-', 'claude-', 'o1-', 'o3-', 'o4-'))
+                       for p in ('gpt-', 'gemini-', 'grok-', 'qwen-', 'qwen/', 'claude-', 'o1-', 'o3-', 'o4-'))
         max_iterations = 3 if is_cloud else 8
         MAX_FUNCTION_SECS = 480   # 8-min hard wall-clock cap per function
 
@@ -763,7 +763,7 @@ class FunctionAnalyzer:
 
         import time as _time
         is_cloud = any(self.txn_analyzer_model.startswith(p)
-                       for p in ('gpt-', 'gemini-', 'grok-', 'qwen-', 'claude-', 'o1-', 'o3-', 'o4-'))
+                       for p in ('gpt-', 'gemini-', 'grok-', 'qwen-', 'qwen/', 'claude-', 'o1-', 'o3-', 'o4-'))
         txn_iters = 2 if is_cloud else 3
         fn_start = _time.time()
         MAX_FUNCTION_SECS = 480
