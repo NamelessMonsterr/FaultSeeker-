@@ -112,17 +112,10 @@ def _llm_call_with_retry(create_client, kwargs, model):
             if 'api key' in msg or 'incorrect api key' in msg or 'invalid api key' in msg:
                 raise AuthenticationError(str(e))
             raise                      # genuine request problem: do not retry
-        except APIStatusError as e:
-            # Router-side 5xx flaps are transient; other status errors are not.
-            if getattr(e, 'status_code', 0) < 500:
-                raise
-            attempt += 1
-            if attempt > LLM_CALL_RETRIES:
-                raise
-            backoff = LLM_RETRY_BACKOFF_LADDER[min(attempt - 1, len(LLM_RETRY_BACKOFF_LADDER) - 1)] + random.uniform(0, 3)
-            print(f"   [!] LLM call to {model} failed ({type(e).__name__} {getattr(e, 'status_code', '')}, attempt {attempt}); retrying in {int(backoff)}s...", flush=True)
-            time.sleep(backoff)
         except transient as e:
+            # NB: RateLimitError subclasses APIStatusError, so this clause MUST
+            # come before `except APIStatusError` or 429s re-raise instantly
+            # with zero retries (the hollow-run bug).
             attempt += 1
             if attempt > LLM_CALL_RETRIES:
                 raise                  # let the caller rotate keys / fail loudly
@@ -133,6 +126,17 @@ def _llm_call_with_retry(create_client, kwargs, model):
                 backoff = max(backoff, float(_m.group(1)) + 3)
             print(f"   [!] LLM call to {model} failed ({type(e).__name__}, attempt {attempt}); retrying in {int(backoff)}s...", flush=True)
             time.sleep(backoff)
+        except APIStatusError as e:
+            # Router-side 5xx flaps are transient; other status errors are not.
+            if getattr(e, 'status_code', 0) < 500:
+                raise
+            attempt += 1
+            if attempt > LLM_CALL_RETRIES:
+                raise
+            backoff = LLM_RETRY_BACKOFF_LADDER[min(attempt - 1, len(LLM_RETRY_BACKOFF_LADDER) - 1)] + random.uniform(0, 3)
+            print(f"   [!] LLM call to {model} failed ({type(e).__name__} {getattr(e, 'status_code', '')}, attempt {attempt}); retrying in {int(backoff)}s...", flush=True)
+            time.sleep(backoff)
+
 
 
 JSON_RETRY_PROMPT = (
