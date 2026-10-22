@@ -129,6 +129,7 @@ class TransactionReplayer:
         from faultseeker.utils.rpc_provider import (
             build_parity_tree,
             extract_storage_writes_from_struct_logs,
+            extract_storage_writes_from_prestate_diff,
             normalize_trace_node,
         )
 
@@ -189,6 +190,29 @@ class TransactionReplayer:
                 )
         except Exception as e:
             print(f'      structured opcode trace failed: {e}')
+
+        if not storage_events:
+            # Fallback for providers that reject the raw structLogger (dRPC
+            # 400s on it) but support prestateTracer with diffMode: derive
+            # the same storage-write events from the pre/post state diff.
+            try:
+                prestate = rpc_call(
+                    chain,
+                    'debug_traceTransaction',
+                    [txn_hash, {
+                        'tracer': 'prestateTracer',
+                        'tracerConfig': {'diffMode': True},
+                        'timeout': '60s',
+                    }],
+                    timeout=60,
+                )
+                if isinstance(prestate, dict):
+                    storage_events = extract_storage_writes_from_prestate_diff(
+                        prestate,
+                        canonical_trace,
+                    )
+            except Exception as e:
+                print(f'      prestate diff trace failed: {e}')
 
         if not state_diff:
             try:
