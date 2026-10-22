@@ -75,6 +75,8 @@ class FunctionAnalyzer:
 
     def _get_function_call_depth(self, function_call):
         temp = function_call.rsplit('_',1)
+        if len(temp) < 2:
+            return 0
         function_name = temp[0].lower()
         address = temp[1].lower()
         key = f"{function_name}::{address}"
@@ -317,17 +319,28 @@ class FunctionAnalyzer:
 
     def _update_potentially_vulnerable_function(self):
         prompt = self.vulnerability_prompts.update_potentially_vulnerable_function
+        # Cheatsheet FIRST: the agent layer truncates prompts to 10k chars
+        # keeping the head, so the strongest hint must not sit at the tail.
+        prompt += 'The following function calls have been confirmed to be vulnerable, if it is in the provided information, please add it to the returned JSON with the predefined format: ' + str(self.cheatsheet)
         prompt += "Current understanding:" + self.understanding_result
         prompt += "Current task:" + json.dumps(self.current_task)
         prompt += 'Analysis result of current task:' + json.dumps(self.processing_result)
-        prompt += 'The following function calls have been confirmed to be vulnerable, if it is in the provided information, please add it to the returned JSON with the predefined format: ' + str(self.cheatsheet)
         result = self.organization_agent.query(prompt)
         logging.info(f"Vulnerable function: {result}")
         # Tolerate wrapper shapes ({"vulnerable_functions": {...}}, {"functions": [...]})
         # instead of silently dropping them below.
+        if isinstance(result, (list, tuple)):
+            _unwrapped = {}
+            for _item in result:
+                if isinstance(_item, dict) and 'name' in _item:
+                    _unwrapped[_item['name']] = {k: v for k, v in _item.items() if k != 'name'}
+            result = _unwrapped
         if isinstance(result, dict) and len(result) == 1:
             _only = next(iter(result.values()))
-            if isinstance(_only, dict) and 'evidence' not in _only:
+            # Only unwrap a TRUE wrapper (its values look like candidate records,
+            # i.e. dicts/lists). A single candidate whose record uses alternate
+            # field names (confidence/description) has scalar values - keep it.
+            if isinstance(_only, dict) and 'evidence' not in _only and 'confidence' not in _only and 'confidence_score' not in _only and any(isinstance(_v, (dict, list)) for _v in _only.values()):
                 result = _only
             elif isinstance(_only, list):
                 _unwrapped = {}
@@ -344,9 +357,10 @@ class FunctionAnalyzer:
                     evidence = result[key][0]
                     confidence_score = result[key][1]
                 elif isinstance(result[key],dict):
-                    evidence = result[key]['evidence']
-                    confidence_score = result[key]['confidence_score']
-                if evidence and confidence_score:
+                    _rec = result[key]
+                    evidence = _rec.get('evidence', _rec.get('reason', _rec.get('description', _rec.get('rationale', ''))))
+                    confidence_score = _rec.get('confidence_score', _rec.get('confidence', _rec.get('score', '')))
+                if confidence_score not in ('', None):
                     if key not in self.potentially_vulnerable_functions:
                         self.potentially_vulnerable_functions[key] = {
                             'confidence_score': [confidence_score],
@@ -396,7 +410,7 @@ class FunctionAnalyzer:
                 current_output = self.trace
                 for d in function_call['depth']:
                     current_output = current_output[d]['children']
-                    self._update_children_call_memo(current_output, function.split('_')[0])
+                self._update_children_call_memo(current_output, function.rsplit('_', 1)[0])
             self.children_call_memo[function] = self.children_call_memo_single
             self.children_call_memo_single = {}
     
@@ -480,7 +494,7 @@ class FunctionAnalyzer:
             if function_name in contract_info[address]:
                 source_code_list = contract_info[address][function_name]
                 for source_code in source_code_list:
-                    if source_code['start_line'] != source_code['end_line']:
+                    if source_code['start_line'] <= source_code['end_line']:
                         if source_code['content'] not in output_memo:
                             output_memo.append(source_code['content'])
                             output.append({'path':source_code['path'],'source_code':source_code['content']})
@@ -515,29 +529,45 @@ class FunctionAnalyzer:
         return output
     
     def _finalize_potentially_vulnerable_functions(self):
-        current_depth = 0
+        # Keep EVERY registered candidate (sorted deepest-first). The old
+        # max-depth filter silently discarded shallower candidates at the very
+        # last step - including real findings.
         finalized_potentially_vulnerable_functions = []
-        for key in self.potentially_vulnerable_functions:
-            if self.potentially_vulnerable_functions[key]['depth'] > current_depth:
-                current_depth = self.potentially_vulnerable_functions[key]['depth']
-                potentially_vulnerable_functions = deepcopy(self.potentially_vulnerable_functions[key])
-                temp = key.rsplit('_',1)
-                function_name = temp[0]
-                address = temp[1].lower()
-                potentially_vulnerable_functions['function'] = function_name
-                potentially_vulnerable_functions['address'] = address
-                finalized_potentially_vulnerable_functions = [potentially_vulnerable_functions]
-            elif self.potentially_vulnerable_functions[key]['depth'] == current_depth:
-                potentially_vulnerable_functions = deepcopy(self.potentially_vulnerable_functions[key])
-                temp = key.rsplit('_',1)
-                function_name = temp[0]
-                address = temp[1].lower()
-                potentially_vulnerable_functions['function'] = function_name
-                potentially_vulnerable_functions['address'] = address
-                finalized_potentially_vulnerable_functions.append(potentially_vulnerable_functions)
+        for key in sorted(self.potentially_vulnerable_functions,
+                          key=lambda k: self.potentially_vulnerable_functions[k].get('depth', 0),
+                          reverse=True):
+            potentially_vulnerable_functions = deepcopy(self.potentially_vulnerable_functions[key])
+            temp = key.rsplit('_',1)
+            function_name = temp[0]
+            address = temp[1].lower()
+            potentially_vulnerable_functions['function'] = function_name
+            potentially_vulnerable_functions['address'] = address
+            finalized_potentially_vulnerable_functions.append(potentially_vulnerable_functions)
         return finalized_potentially_vulnerable_functions
         
     def _process_potentially_vulnerable_functions(self):
+        # Merge candidates found by per-function analyzers (each gets its OWN
+        # FunctionAnalyzer copy, so without this merge their findings never
+        # reach scoring). Repeated-pattern candidates are already on self.
+        _merged = 0
+        for _bucket in (getattr(self, 'functions_to_be_inspected', None) or {}):
+            _ar = (self.functions_to_be_inspected.get(_bucket) or {}).get('analysis_result') or {}
+            for _k, _v in (_ar.get('potentially_vulnerable_functions') or {}).items():
+                if not isinstance(_v, dict):
+                    continue
+                if _k not in self.potentially_vulnerable_functions:
+                    self.potentially_vulnerable_functions[_k] = _v
+                    _merged += 1
+                else:
+                    _existing = self.potentially_vulnerable_functions[_k]
+                    for _field in ('confidence_score', 'evidence'):
+                        _vals = _v.get(_field)
+                        if isinstance(_vals, list) and isinstance(_existing.get(_field), list):
+                            _existing[_field].extend(_vals)
+                    _existing['depth'] = max(_existing.get('depth', 0) or 0, _v.get('depth', 0) or 0)
+                    _merged += 1
+        if _merged:
+            print(f"   [+] merged {_merged} per-function vuln candidate(s) into scoring set", flush=True)
         potentially_vulnerable_functions = {}
         for func in self.potentially_vulnerable_functions:
             potentially_vulnerable_functions[func] = {
@@ -548,6 +578,10 @@ class FunctionAnalyzer:
         self.potentially_vulnerable_functions = potentially_vulnerable_functions
 
     def _rank_potentially_vulnerable_functions(self):
+        if not self.potentially_vulnerable_functions:
+            self.ranked_result = []
+            print("   [i] no vuln candidates - skipping rank call", flush=True)
+            return
         prompt_text = self.vulnerability_prompts.rank_potentially_vulnerable_functions.format(
             current_understanding=json.dumps(self.understanding_result),
             potentially_vulnerable_functions=json.dumps(self.potentially_vulnerable_functions)
@@ -571,7 +605,7 @@ class FunctionAnalyzer:
                 balance_change = json.dumps(self.fundflow_analysis['balance_change'])
             )
             selected_functions_new = self.agent.query(prompt)
-            if len(selected_functions_new) < len(selected_functions):
+            if isinstance(selected_functions_new, (list, dict)) and 0 < len(selected_functions_new) < len(selected_functions):
                 selected_functions = selected_functions_new
         selected_functions_with_created_contract_in_params = list(self.address_calls_with_created_contract_in_params.keys())
         count = 0
@@ -587,7 +621,7 @@ class FunctionAnalyzer:
                 function_call_to_be_inspected = json.dumps(function_call_to_be_inspected_summary),
             )
             selected_functions_new = self.agent.query(prompt)
-            if len(selected_functions_new) < len(selected_functions_with_created_contract_in_params):
+            if isinstance(selected_functions_new, (list, dict)) and 0 < len(selected_functions_new) < len(selected_functions_with_created_contract_in_params):
                 selected_functions_with_created_contract_in_params = selected_functions_new
         
         self._prepare_children_call_memo(selected_functions)
@@ -600,7 +634,10 @@ class FunctionAnalyzer:
             _room = max(0, _cap - len(self.repeated_patterns))
             selected_functions_with_created_contract_in_params = selected_functions_with_created_contract_in_params[:_room]
             _room = max(0, _room - len(selected_functions_with_created_contract_in_params))
-            selected_functions = selected_functions[:_room]
+            if isinstance(selected_functions, dict):
+                selected_functions = dict(list(selected_functions.items())[:_room])
+            else:
+                selected_functions = selected_functions[:_room]
             print(f"[i] FAULTSEEKER_MAX_FUNCTIONS={_cap}: analyzing {len(self.repeated_patterns) + len(selected_functions_with_created_contract_in_params) + len(selected_functions)} of the selected functions", flush=True)
 
         total_functions = len(self.repeated_patterns) + len(selected_functions_with_created_contract_in_params) + len(selected_functions)
@@ -618,7 +655,7 @@ class FunctionAnalyzer:
                 del repeated_pattern['start_index']
             if 'end_index' in repeated_pattern:
                 del repeated_pattern['end_index']
-            self.function_call_info_summary = repeated_pattern
+            self.function_call_info_summary = dict(repeated_pattern)
             function_call_related_info = {}
             for f in repeated_pattern['pattern']:
                 if f['function']:
@@ -641,7 +678,6 @@ class FunctionAnalyzer:
             }
         print('functions with created contract in params to be analyzed:', selected_functions_with_created_contract_in_params)
         for function in selected_functions_with_created_contract_in_params:
-            function = function.split('_')[0]
             if function in self.examined_function_memo:
                 continue
             self.examined_function_memo.append(function)
@@ -669,8 +705,13 @@ class FunctionAnalyzer:
                 for address in self.address_calls_with_created_contract_in_params[function]['address']:
                     related_info = self._retrieve_related_info(address, function_name)
                     if related_info:
-                        current_output = deepcopy(self.trace)
-                        for d in function_calls[0]['depth']:
+                        _depth = function_calls[0]['depth']
+                        for _fc in function_calls:
+                            if _fc.get('address') == address:
+                                _depth = _fc['depth']
+                                break
+                        current_output = self.trace
+                        for d in _depth:
                             current_output = current_output[d]['children']
                         self._update_children_call_memo(current_output, function_name)
                         address_related_info[address] = related_info
@@ -702,7 +743,7 @@ class FunctionAnalyzer:
                         'potentially_vulnerable_functions', 'children_call_memo_single'}
 
         def _analyze_single_function(function):
-            temp = function.split('_')
+            temp = function.rsplit('_', 1)
             function_name = temp[0]
             address = temp[1]
             fa = FunctionAnalyzer(model=self.txn_analyzer_model,
@@ -736,10 +777,10 @@ class FunctionAnalyzer:
         pending_functions = []
         for function in selected_functions:
             if function in self.functions_to_be_inspected:
-                function_name = function.split('_')[0]
-                if function_name in self.examined_function_memo:
+                function_name = function.rsplit('_', 1)[0]
+                if function in self.examined_function_memo:
                     continue
-                self.examined_function_memo.append(function_name)
+                self.examined_function_memo.append(function)
                 pending_functions.append(function)
 
         if _workers > 1 and len(pending_functions) > 1:
@@ -752,6 +793,7 @@ class FunctionAnalyzer:
                     print(f"         [{current}/{total_functions}] Analyzing {function.split('_')[0]}...", flush=True)
                     futs[pool.submit(_analyze_single_function, function)] = function
                 done_count = 0
+                failed_count = 0
                 for fut in as_completed(futs):
                     function = futs[fut]
                     done_count += 1
@@ -765,7 +807,10 @@ class FunctionAnalyzer:
                         if isinstance(e, (RateLimitError, AuthenticationError, PermissionDeniedError)):
                             pool.shutdown(wait=False, cancel_futures=True)
                             raise
+                        failed_count += 1
                         print(f"         [done {done_count}/{len(pending_functions)}] {function} FAILED: {type(e).__name__}: {str(e)[:160]}", flush=True)
+                if pending_functions and failed_count == len(pending_functions):
+                    raise RuntimeError(f"[Stage 2] ALL {failed_count} function analyses failed - this is an infrastructure failure, not a clean no-finding result")
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
         else:
@@ -847,10 +892,20 @@ class FunctionAnalyzer:
         Returns:
             Dictionary containing function analysis results
         """
-        # Initialize state
+        # Initialize state - FULL reset: the pipeline reuses one analyzer
+        # instance, so stale candidates/understanding from a previous tx would
+        # contaminate this run's scoring.
         self.task_tree = ''
         self.txn_hash = forensics_result.transaction_hash
         self.cheatsheet = []
+        self.potentially_vulnerable_functions = {}
+        self.understanding_result = ''
+        self.children_call_memo = {}
+        self.children_call_memo_single = {}
+        self.examined_function_memo = []
+        self.function_call_info_summary = {}
+        self.current_task = ''
+        self.processing_result = ''
 
         # Store Stage 1 outputs
         self.analysis_result = forensics_result

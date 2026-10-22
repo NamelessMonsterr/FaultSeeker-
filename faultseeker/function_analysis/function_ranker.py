@@ -77,11 +77,14 @@ class FunctionRanker:
                                if (i['function'] is None) or
                                (i['function'].lower() in self.filtered_functions)])
 
-                    if check == 0:
+                    if check < len(pattern['pattern']):
+                        # Dedup on the pattern's REAL signature (function names
+                        # + addresses). The old key used only filtered-out
+                        # functions, collapsing every all-unfiltered pattern to
+                        # '' and silently dropping all but the first.
                         repeated_memo_key = ','.join([
-                            i['function'] for i in pattern['pattern']
-                            if (i['function'] is None) or
-                            (i['function'].lower() in self.filtered_functions)
+                            f"{i.get('function')}@{i.get('address')}"
+                            for i in pattern['pattern']
                         ])
 
                         if repeated_memo_key not in repeated_patterns_memo:
@@ -95,6 +98,8 @@ class FunctionRanker:
 
         # Process calls with created contracts in params
         for call in forensics_result.address_calls_with_created_contract:
+            if not call.get('function'):
+                continue
             if call['function'].lower() in self.extended_filtered_functions:
                 continue
 
@@ -126,6 +131,8 @@ class FunctionRanker:
         for _, value in forensics_result.functions_to_be_inspected.items():
             if value:
                 for call in value:
+                    if not call.get('function'):
+                        continue
                     if call['function'].lower() in self.extended_filtered_functions:
                         continue
 

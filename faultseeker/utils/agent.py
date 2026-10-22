@@ -114,7 +114,8 @@ def _llm_call_with_retry(create_client, kwargs, model):
         except BadRequestError as e:
             msg = str(e).lower()
             if 'api key' in msg or 'incorrect api key' in msg or 'invalid api key' in msg:
-                raise AuthenticationError(str(e))
+                import httpx as _httpx
+                raise AuthenticationError(str(e), response=_httpx.Response(401, request=_httpx.Request('POST', 'https://auth.invalid')), body=None)
             raise                      # genuine request problem: do not retry
         except transient as e:
             # NB: RateLimitError subclasses APIStatusError, so this clause MUST
@@ -127,7 +128,7 @@ def _llm_call_with_retry(create_client, kwargs, model):
             # Honor provider hints ("try again in 12.3s") when they exceed the ladder.
             _m = re.search(r'try again in ([0-9.]+)s', str(e), re.I)
             if _m:
-                backoff = max(backoff, float(_m.group(1)) + 3)
+                backoff = min(max(backoff, float(_m.group(1)) + 3), 120)  # cap provider hints: an unbounded hint could sleep a worker for hours
             print(f"   [!] LLM call to {model} failed ({type(e).__name__}, attempt {attempt}); retrying in {int(backoff)}s...", flush=True)
             time.sleep(backoff)
         except APIStatusError as e:
@@ -206,6 +207,9 @@ class AbstractAgent(abc.ABC):
           4. Regex extraction of first {...} or [...]
           5. eval() fallback (last resort)
         """
+        # Reasoning models (NIM/DeepSeek-class) wrap chain-of-thought in
+        # <think>...</think>; those braces break every strategy below.
+        text = re.sub(r'<think>[\s\S]*?</think>', '', text)
         # Strategy 1 — clean and direct parse
         cleaned = text.strip().strip('`').strip()
         try:
@@ -229,20 +233,50 @@ class AbstractAgent(abc.ABC):
             except Exception:
                 pass
 
-        # Strategy 4 — regex for first {...} or [...]
-        obj_match = re.search(r'(\{[\s\S]*\})', text)
-        if obj_match:
-            try:
-                return json.loads(obj_match.group(1))
-            except Exception:
-                pass
-
-        arr_match = re.search(r'(\[[\s\S]*\])', text)
-        if arr_match:
-            try:
-                return json.loads(arr_match.group(1))
-            except Exception:
-                pass
+        # Strategy 4 — balanced extraction of the FIRST complete {...} or [...].
+        # (The old greedy regex spanned the first '{' to the LAST '}', producing
+        # an invalid span on prose with braces or multiple JSON objects.)
+        def _balanced(t, open_ch, close_ch):
+            start = t.find(open_ch)
+            if start == -1:
+                return None
+            depth = 0
+            in_str = False
+            esc = False
+            quote = ''
+            for i in range(start, len(t)):
+                ch = t[i]
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif ch == '\\':
+                        esc = True
+                    elif ch == quote:
+                        in_str = False
+                    continue
+                if ch in ('"', "'"):
+                    in_str = True
+                    quote = ch
+                elif ch == open_ch:
+                    depth += 1
+                elif ch == close_ch:
+                    depth -= 1
+                    if depth == 0:
+                        return t[start:i+1]
+            return None
+        _obj_at = text.find('{')
+        _arr_at = text.find('[')
+        if _arr_at != -1 and (_obj_at == -1 or _arr_at < _obj_at):
+            _pairs = (('[', ']'), ('{', '}'))
+        else:
+            _pairs = (('{', '}'), ('[', ']'))
+        for _pair in _pairs:
+            _span = _balanced(text, *_pair)
+            if _span:
+                try:
+                    return json.loads(_span)
+                except Exception:
+                    pass
 
         # Strategy 5 — all structural parsing failed; do NOT eval() LLM output
         # (eval on untrusted text is a critical security vulnerability)
@@ -276,10 +310,15 @@ class AbstractAgent(abc.ABC):
         Query the LLM and retry up to max_retries times if the output
         is not valid JSON. On each retry, inject a correction prompt.
         """
+        _budget = int(os.getenv('FAULTSEEKER_MAX_QUERY_SECS', '900'))
+        _t0 = time.time()
         result_raw = self._send_message(user_message, temperature)
         print(f"   [dbg] LLM raw reply ({self.model}): {str(result_raw)[:300]!r}", flush=True)
         retries = 0
         while retries <= max_retries:
+            if time.time() - _t0 > _budget:
+                print(f"[!] LLM query exceeded FAULTSEEKER_MAX_QUERY_SECS={_budget}s wall-clock budget; returning empty", flush=True)
+                return {}
             try:
                 return self._extract_json(result_raw)
             except ValueError:
@@ -447,7 +486,7 @@ class GPTAgent(AbstractAgent):
                 if fb and fb != self.model:
                     # Provider-aware fallback: resolve the fallback's OWN endpoint
                     # and keys (may be a different provider than the primary).
-                    fb_base, fb_env = self._detect_provider(fb)
+                    fb_base, fb_env = UniversalAgent._detect_provider(fb)
                     if fb_env == 'NARAROUTER_API_KEY':
                         fb_base = os.getenv('NARAROUTER_BASE_URL', fb_base)
                     if fb_env == 'GROQ_API_KEY':

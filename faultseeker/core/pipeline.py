@@ -160,16 +160,19 @@ class FaultSeekerPipeline:
         print("   [OK] Forensics analysis completed")
 
         # Gap 8: Med-B - Trace Visualization (Visualizes trace tree and call types)
-        try:
-            import matplotlib.pyplot as plt
-            viz_dir = getattr(self.config, 'output_dir', './data/output')
-            os.makedirs(viz_dir, exist_ok=True)
-            viz_path = os.path.join(viz_dir, f"{txn_hash}_trace.png")
-            self.forensics_orchestrator.txn_sequencer.save_visualization(viz_path)
-            plt.close('all')
-            print(f"   [OK] Trace visualization saved to {viz_path}")
-        except Exception as e:
-            print(f"   [!] Note: Could not generate trace visualization: {str(e)}")
+        if os.getenv('FAULTSEEKER_SKIP_VIZ') == '1':
+            print("   [i] trace visualization skipped (FAULTSEEKER_SKIP_VIZ=1)")
+        else:
+            try:
+                import matplotlib.pyplot as plt
+                viz_dir = getattr(self.config, 'output_dir', './data/output')
+                os.makedirs(viz_dir, exist_ok=True)
+                viz_path = os.path.join(viz_dir, f"{txn_hash}_trace.png")
+                self.forensics_orchestrator.txn_sequencer.save_visualization(viz_path)
+                plt.close('all')
+                print(f"   [OK] Trace visualization saved to {viz_path}")
+            except Exception as e:
+                print(f"   [!] Note: Could not generate trace visualization: {str(e)}")
 
         # Gap 2: HITL Checkpoint 1 — Post-Forensics
         hitl = HumanInterface(enabled=getattr(self.config, 'human_in_loop', False))

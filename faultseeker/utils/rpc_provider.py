@@ -490,6 +490,20 @@ def rpc_call(chain: str, method: str, params: list,
     if not providers:
         raise RuntimeError(f'No RPC providers for chain: {chain}')
 
+    # Trace methods decide analysis quality. When the operator explicitly set
+    # {CHAIN}_RPC_URL (e.g. an archive/trace-capable endpoint), pin trace calls
+    # to it and fail LOUD on error - silently rotating to public RPCs (which
+    # 403 on debug_*) is how runs came out empty with no visible error.
+    _explicit = os.getenv(f'{canonical.upper()}_RPC_URL', '').strip()
+    if _explicit and (method.startswith('debug_') or method.startswith('trace_')):
+        providers = [p for p in providers if p.url == _explicit]
+        if not providers:
+            raise RuntimeError(
+                f'{canonical.upper()}_RPC_URL is set but not in the provider registry')
+        _pinned = True
+    else:
+        _pinned = False
+
     last_err = None
     for provider in providers:
         if provider.is_circuit_open:
@@ -518,6 +532,10 @@ def rpc_call(chain: str, method: str, params: list,
             last_err = exc
 
     _registry.log_state(canonical)
+    if _pinned:
+        raise RuntimeError(
+            f'Pinned trace RPC ({canonical.upper()}_RPC_URL) failed for {method}: {last_err}. '
+            f'Fix the endpoint or unset it - NOT falling back to public RPCs (thin trace = empty results).')
     raise RuntimeError(f'All providers failed for {chain}:{method}. Last: {last_err}')
 
 
