@@ -60,6 +60,24 @@ JSON_MODE_MODELS = {
 }
 
 
+def _parse_api_keys(raw):
+    """Tolerant multi-key parse: newline/comma/space separated, .env-style
+    VAR= prefixes tolerated (only *_API_KEY* assignments count)."""
+    out = []
+    for tok in re.split(r"[\s,;]+", (raw or '').strip()):
+        tok = tok.strip().strip('"').strip("'")
+        if not tok:
+            continue
+        if '=' in tok:
+            name, _, tok = tok.partition('=')
+            if 'API_KEY' not in name:
+                continue
+        tok = tok.strip()
+        if tok:
+            out.append(tok)
+    return out
+
+
 # ── Bounded LLM calls (console demo hardening) ────────────────────────────────
 # Without an explicit client timeout the OpenAI SDK waits ~600s per attempt and
 # retries internally, so one slow provider wedged a whole analysis run. These
@@ -418,7 +436,7 @@ class GPTAgent(AbstractAgent):
                         fb_kwargs = dict(messages=self._truncate_history(self.memory),
                                          model=fb, temperature=0)
                         cc = _llm_call_with_retry(
-                            lambda: OpenAI(api_key=self.api_key, base_url=self.base_url,
+                            lambda: OpenAI(api_key=self._next_api_key(), base_url=self.base_url,
                                            timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
                             fb_kwargs, fb)
                         reply = cc.choices[0].message.content or ""
@@ -453,13 +471,24 @@ class UniversalAgent(AbstractAgent):
         if env_var == 'GROQ_API_KEY':
             detected_base_url = os.getenv('GROQ_BASE_URL', detected_base_url)
         self.base_url = base_url or detected_base_url
-        self.api_key  = api_key  or os.getenv(env_var, '')
+        # Multiple keys in the env var (newline/comma/space separated, .env-style
+        # tolerated) rotate round-robin per client creation, so provider
+        # per-minute caps add up across keys.
+        raw_keys = api_key or os.getenv(env_var, '')
+        self.api_keys = _parse_api_keys(raw_keys)
+        self.api_key  = self.api_keys[0] if self.api_keys else ''
+        self._key_rr  = 0
         if not self.api_key:
             raise ValueError(
                 f"No API key found for model '{model_name}'. "
                 f"Set the '{env_var}' environment variable in .env"
             )
         super().__init__(task, model_name=model_name)
+
+    def _next_api_key(self):
+        k = self.api_keys[self._key_rr % len(self.api_keys)]
+        self._key_rr += 1
+        return k
 
     @staticmethod
     def _detect_provider(model_name: str):
@@ -489,7 +518,7 @@ class UniversalAgent(AbstractAgent):
             if self.model in JSON_MODE_MODELS:
                 kwargs['response_format'] = {"type": "json_object"}
             chat_completion = _llm_call_with_retry(
-                lambda: OpenAI(api_key=self.api_key, base_url=self.base_url,
+                lambda: OpenAI(api_key=self._next_api_key(), base_url=self.base_url,
                                timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
                 kwargs, self.model)
             reply = chat_completion.choices[0].message.content or ""
