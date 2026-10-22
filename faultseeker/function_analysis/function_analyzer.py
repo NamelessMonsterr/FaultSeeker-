@@ -567,6 +567,17 @@ class FunctionAnalyzer:
         
         self._prepare_children_call_memo(selected_functions)
 
+        # Optional demo cap: analyze only the top-N functions (by existing
+        # selection order) so a run fits a tight demo window. Repeated patterns
+        # always survive the cap (they are the highest-signal findings).
+        _cap = int(os.getenv('FAULTSEEKER_MAX_FUNCTIONS', '0') or 0)
+        if _cap > 0:
+            _room = max(0, _cap - len(self.repeated_patterns))
+            selected_functions_with_created_contract_in_params = selected_functions_with_created_contract_in_params[:_room]
+            _room = max(0, _room - len(selected_functions_with_created_contract_in_params))
+            selected_functions = selected_functions[:_room]
+            print(f"[i] FAULTSEEKER_MAX_FUNCTIONS={_cap}: analyzing {len(self.repeated_patterns) + len(selected_functions_with_created_contract_in_params) + len(selected_functions)} of the selected functions", flush=True)
+
         total_functions = len(self.repeated_patterns) + len(selected_functions_with_created_contract_in_params) + len(selected_functions)
         current = 0
         print('repeated patterns to be analyzed:', self.repeated_patterns)
