@@ -171,7 +171,13 @@ class TransactionReplayer:
         if canonical_trace is None:
             return None
 
-        try:
+        # The raw structLogger with full stack+storage can return hundreds of
+        # MB for exploit-sized txs and OOMs small instances. Opt out via env.
+        if os.environ.get('FAULTSEEKER_SKIP_STRUCTLOGS') == '1':
+            print('      skipping opcode structLogs trace (FAULTSEEKER_SKIP_STRUCTLOGS=1)')
+            opcode_trace = None
+        else:
+          try:
             opcode_trace = rpc_call(
                 chain,
                 'debug_traceTransaction',
@@ -188,7 +194,7 @@ class TransactionReplayer:
                     opcode_trace.get('structLogs', []) or [],
                     canonical_trace,
                 )
-        except Exception as e:
+          except Exception as e:
             print(f'      structured opcode trace failed: {e}')
 
         if not storage_events:
