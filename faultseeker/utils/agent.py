@@ -41,6 +41,11 @@ PROVIDER_CONFIG = {
     'laguna':   ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
     'nemotron': ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
     'minimax':  ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    # GroqCloud (OpenAI-compatible, free dev tier)
+    'llama-':   ('https://api.groq.com/openai/v1',                             'GROQ_API_KEY'),
+    'qwen/':    ('https://api.groq.com/openai/v1',                             'GROQ_API_KEY'),
+    'openai/gpt-oss': ('https://api.groq.com/openai/v1',                       'GROQ_API_KEY'),
+    'allam-':   ('https://api.groq.com/openai/v1',                             'GROQ_API_KEY'),
     # Anthropic Claude (NB: not OpenAI-compatible natively — requires anthropic sdk)
     'claude-':  ('https://api.anthropic.com/v1',                                 'ANTHROPIC_API_KEY'),
 }
@@ -441,6 +446,8 @@ class UniversalAgent(AbstractAgent):
         detected_base_url, env_var = self._detect_provider(model_name)
         if env_var == 'NARAROUTER_API_KEY':
             detected_base_url = os.getenv('NARAROUTER_BASE_URL', detected_base_url)
+        if env_var == 'GROQ_API_KEY':
+            detected_base_url = os.getenv('GROQ_BASE_URL', detected_base_url)
         self.base_url = base_url or detected_base_url
         self.api_key  = api_key  or os.getenv(env_var, '')
         if not self.api_key:
