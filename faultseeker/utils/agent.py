@@ -46,6 +46,10 @@ PROVIDER_CONFIG = {
     'qwen/':    ('https://api.groq.com/openai/v1',                             'GROQ_API_KEY'),
     'openai/gpt-oss': ('https://api.groq.com/openai/v1',                       'GROQ_API_KEY'),
     'allam-':   ('https://api.groq.com/openai/v1',                             'GROQ_API_KEY'),
+    # NVIDIA NIM (OpenAI-compatible; free tier ~40 RPM, dashed live model ids)
+    'z-ai/':        ('https://integrate.api.nvidia.com/v1',                          'NVIDIA_API_KEY'),
+    'deepseek-ai/': ('https://integrate.api.nvidia.com/v1',                          'NVIDIA_API_KEY'),
+    'nvidia/':      ('https://integrate.api.nvidia.com/v1',                          'NVIDIA_API_KEY'),
     # Anthropic Claude (NB: not OpenAI-compatible natively — requires anthropic sdk)
     'claude-':  ('https://api.anthropic.com/v1',                                 'ANTHROPIC_API_KEY'),
 }
