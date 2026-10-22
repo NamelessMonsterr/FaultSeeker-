@@ -446,6 +446,7 @@ class FunctionAnalyzer:
                 break
         
     def _retrieve_source_code(self, address, function_name):
+        print(f"   [i] retrieving source for {function_name} @ {address[:10]}...", flush=True)
         output = []
         output_memo = []
         address = address.lower()
@@ -463,6 +464,7 @@ class FunctionAnalyzer:
         return output
 
     def _retrieve_related_info(self, address, function_name):
+        print(f"   [i] gathering related info for {function_name} @ {address[:10]}...", flush=True)
         output = {}
         related_balance_change = {}
         address = address.lower()

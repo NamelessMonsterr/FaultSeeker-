@@ -521,7 +521,7 @@ class UniversalAgent(AbstractAgent):
         # Default to OpenAI
         return 'https://api.openai.com/v1', 'OPENAI_API_KEY'
 
-    def _truncate_history(self, history, max_turns=2):
+    def _truncate_history(self, history, max_turns=1):
         system_prompt = history[0]
         message_pairs = history[1:]
         truncated = message_pairs[-(max_turns * 2):]
