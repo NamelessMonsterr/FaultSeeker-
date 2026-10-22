@@ -61,7 +61,9 @@ JSON_MODE_MODELS = {
 # knobs bound every call; auth/quota failures are re-raised so the console's
 # per-key rotation can engage instead of silently producing empty output.
 LLM_CALL_TIMEOUT_SECS = int(os.getenv('FAULTSEEKER_LLM_TIMEOUT_SECS', '120'))
-LLM_CALL_RETRIES = int(os.getenv('FAULTSEEKER_LLM_RETRIES', '2'))
+LLM_CALL_RETRIES = int(os.getenv('FAULTSEEKER_LLM_RETRIES', '4'))
+# NaraRouter-class routers flap ~30% of calls (429/5xx/slow); give them room.
+LLM_RETRY_BACKOFF_LADDER = [5, 15, 45, 90]
 
 
 def _llm_call_with_retry(create_client, kwargs, model):
@@ -70,9 +72,10 @@ def _llm_call_with_retry(create_client, kwargs, model):
     Raises on auth/quota/not-found (caller rotates keys or fails fast) and on
     exhausted transient failures; returns the completion on success.
     """
+    import random
     from openai import (APITimeoutError, APIConnectionError, RateLimitError,
                         AuthenticationError, PermissionDeniedError, NotFoundError,
-                        BadRequestError)
+                        BadRequestError, APIStatusError)
     transient = (APITimeoutError, APIConnectionError, RateLimitError)
     attempt = 0
     while True:
@@ -86,12 +89,22 @@ def _llm_call_with_retry(create_client, kwargs, model):
             if 'api key' in msg or 'incorrect api key' in msg or 'invalid api key' in msg:
                 raise AuthenticationError(str(e))
             raise                      # genuine request problem: do not retry
+        except APIStatusError as e:
+            # Router-side 5xx flaps are transient; other status errors are not.
+            if getattr(e, 'status_code', 0) < 500:
+                raise
+            attempt += 1
+            if attempt > LLM_CALL_RETRIES:
+                raise
+            backoff = LLM_RETRY_BACKOFF_LADDER[min(attempt - 1, len(LLM_RETRY_BACKOFF_LADDER) - 1)] + random.uniform(0, 3)
+            print(f"   [!] LLM call to {model} failed ({type(e).__name__} {getattr(e, 'status_code', '')}, attempt {attempt}); retrying in {int(backoff)}s...", flush=True)
+            time.sleep(backoff)
         except transient as e:
             attempt += 1
             if attempt > LLM_CALL_RETRIES:
                 raise                  # let the caller rotate keys / fail loudly
-            backoff = 5 * attempt
-            print(f"   [!] LLM call to {model} failed ({type(e).__name__}, attempt {attempt}); retrying in {backoff}s...", flush=True)
+            backoff = LLM_RETRY_BACKOFF_LADDER[min(attempt - 1, len(LLM_RETRY_BACKOFF_LADDER) - 1)] + random.uniform(0, 3)
+            print(f"   [!] LLM call to {model} failed ({type(e).__name__}, attempt {attempt}); retrying in {int(backoff)}s...", flush=True)
             time.sleep(backoff)
 
 
@@ -384,9 +397,29 @@ class GPTAgent(AbstractAgent):
             # can rotate to a fallback key; only content-level problems are
             # swallowed into an empty reply.
             from openai import (APITimeoutError, APIConnectionError, RateLimitError,
-                                AuthenticationError, PermissionDeniedError, NotFoundError)
-            if isinstance(e, (APITimeoutError, APIConnectionError, RateLimitError,
-                              AuthenticationError, PermissionDeniedError, NotFoundError)):
+                                AuthenticationError, PermissionDeniedError, NotFoundError,
+                                APIStatusError)
+            transient_fail = isinstance(e, (APITimeoutError, APIConnectionError, RateLimitError)) or \
+                (isinstance(e, APIStatusError) and getattr(e, 'status_code', 0) >= 500)
+            if transient_fail:
+                fb = os.getenv('FAULTSEEKER_LLM_FALLBACK_MODEL', '').strip()
+                if fb and fb != self.model:
+                    print(f"   [!] {self.model} exhausted retries ({type(e).__name__}); trying fallback model {fb}", flush=True)
+                    try:
+                        fb_kwargs = dict(messages=self._truncate_history(self.memory),
+                                         model=fb, temperature=0)
+                        cc = _llm_call_with_retry(
+                            lambda: OpenAI(api_key=self.api_key, base_url=self.base_url,
+                                           timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
+                            fb_kwargs, fb)
+                        reply = cc.choices[0].message.content or ""
+                        self.memory.append({"role": "assistant", "content": reply})
+                        return reply
+                    except Exception as fb_e:  # noqa: BLE001
+                        print(f"   [!] fallback model {fb} also failed ({type(fb_e).__name__})", flush=True)
+                self.memory.append({"role": "assistant", "content": ''})
+                raise
+            if isinstance(e, (AuthenticationError, PermissionDeniedError, NotFoundError)):
                 self.memory.append({"role": "assistant", "content": ''})
                 raise
             self.memory.append({"role": "assistant", "content": ''})
