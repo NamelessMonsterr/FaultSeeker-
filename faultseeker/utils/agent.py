@@ -277,6 +277,7 @@ class AbstractAgent(abc.ABC):
                 retries += 1
                 if retries > max_retries:
                     logger.warning("JSON parsing failed after %d retries; returning empty dict", max_retries)
+                    print(f"[!] LLM response was not valid JSON after {max_retries} retries; last reply: {str(result_raw)[:200]!r}", flush=True)
                     return {}
                 logger.debug("JSON retry %d/%d", retries, max_retries)
                 result_raw = self._send_message(JSON_RETRY_PROMPT, 0.0)  # Force temp=0 on retries
@@ -290,6 +291,7 @@ class AbstractAgent(abc.ABC):
             return self._query_with_json_retry(user_message, temperature)
         except Exception as e:
             logger.error("query() failed completely: %s", e)
+            print(f"[!] LLM query failed ({type(e).__name__}): {str(e)[:300]}", flush=True)
             return {}
 
 
@@ -464,6 +466,9 @@ class GPTAgent(AbstractAgent):
                 self.memory.append({"role": "assistant", "content": ''})
                 raise
             self.memory.append({"role": "assistant", "content": ''})
+            # Demo console visibility: SSE shows stdout, so surface the real
+            # provider error instead of only a generic string.
+            print(f"[!] LLM call failed ({type(e).__name__}): {str(e)[:300]}", flush=True)
             return "An error occurred."
 
 
@@ -556,6 +561,9 @@ class UniversalAgent(AbstractAgent):
                 self.memory.append({"role": "assistant", "content": ''})
                 raise
             self.memory.append({"role": "assistant", "content": ''})
+            # Demo console visibility: SSE shows stdout, so surface the real
+            # provider error instead of only a generic string.
+            print(f"[!] LLM call failed ({type(e).__name__}): {str(e)[:300]}", flush=True)
             return "An error occurred."
 
 
