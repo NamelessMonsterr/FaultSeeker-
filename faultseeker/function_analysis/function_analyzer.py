@@ -325,28 +325,26 @@ class FunctionAnalyzer:
         prompt += 'Analysis result of current task:' + json.dumps(self.processing_result)
         result = self.organization_agent.query(prompt)
         logging.info(f"Vulnerable function: {result}")
-        # Tolerate wrapper shapes ({"vulnerable_functions": {...}}, {"functions": [...]})
-        # instead of silently dropping them below.
-        if isinstance(result, (list, tuple)):
-            _unwrapped = {}
-            for _item in result:
-                if isinstance(_item, dict) and 'name' in _item:
-                    _unwrapped[_item['name']] = {k: v for k, v in _item.items() if k != 'name'}
-            result = _unwrapped
+        # Normalize supported wrappers without silently discarding junk members.
         if isinstance(result, dict) and len(result) == 1:
-            _only = next(iter(result.values()))
-            # Only unwrap a TRUE wrapper (its values look like candidate records,
-            # i.e. dicts/lists). A single candidate whose record uses alternate
-            # field names (confidence/description) has scalar values - keep it.
-            if isinstance(_only, dict) and 'evidence' not in _only and 'confidence' not in _only and 'confidence_score' not in _only and any(isinstance(_v, (dict, list)) for _v in _only.values()):
-                result = _only
-            elif isinstance(_only, list):
-                _unwrapped = {}
-                for _item in _only:
-                    if isinstance(_item, dict) and 'name' in _item:
-                        _unwrapped[_item['name']] = {k: v for k, v in _item.items() if k != 'name'}
-                if _unwrapped:
-                    result = _unwrapped
+            wrapper_key = next(iter(result))
+            if wrapper_key in ('vulnerable_functions', 'functions'):
+                result = result[wrapper_key]
+        if isinstance(result, (list, tuple)):
+            normalized = {}
+            for item in result:
+                if isinstance(item, dict) and isinstance(item.get('name'), str):
+                    normalized[item['name']] = {k: v for k, v in item.items() if k != 'name'}
+                else:
+                    self.rejected_findings.append({
+                        'key': str(item)[:80], 'reason': 'malformed_model_output',
+                        'detail': 'candidate list member must be an object with a string name'})
+            result = normalized
+        if not isinstance(result, dict):
+            self.rejected_findings.append({
+                'key': str(result)[:80], 'reason': 'malformed_model_output',
+                'detail': f'organization agent returned {type(result).__name__}, expected a JSON object'})
+            result = {}
         # Canonical-target echo binding: a candidate key is accepted only when
         # it exactly names an observed call id - either a functions_to_be_inspected
         # key or a trace-derived function_call_loc_memo entry ("name::address").

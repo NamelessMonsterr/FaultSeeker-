@@ -308,6 +308,7 @@ class FaultSeekerPipeline:
             # Main analysis results
             'ranked_suspicious_functions': analysis_result.get('ranked_result', []),
             'potentially_vulnerable_functions': analysis_result.get('potentially_vulnerable_functions', []),
+            'rejected_findings': analysis_result.get('rejected_findings') or [],
             'transaction_understanding': analysis_result.get('transaction_understanding', ''),
 
             # Gap 3+4: Confidence scores and evidence cards

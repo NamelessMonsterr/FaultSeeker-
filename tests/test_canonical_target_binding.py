@@ -149,3 +149,32 @@ def test_empty_and_emptydict_results_noop():
     fa._update_potentially_vulnerable_function()
     assert fa.potentially_vulnerable_functions == {}
     assert fa.rejected_findings == []
+
+
+def test_malformed_string_result_rejected_not_crash():
+    fa = _make_analyzer("not json at all")
+    fa._update_potentially_vulnerable_function()
+    assert fa.potentially_vulnerable_functions == {}
+    assert len(fa.rejected_findings) == 1
+    assert fa.rejected_findings[0]["reason"] == "malformed_model_output"
+
+
+def test_none_result_rejected_not_crash():
+    fa = _make_analyzer(None)
+    fa._update_potentially_vulnerable_function()
+    assert fa.potentially_vulnerable_functions == {}
+    assert fa.rejected_findings[0]["reason"] == "malformed_model_output"
+
+
+def test_junk_list_result_rejected_not_crash():
+    fa = _make_analyzer([1, 2, 3])
+    fa._update_potentially_vulnerable_function()
+    assert fa.potentially_vulnerable_functions == {}
+    assert fa.rejected_findings[0]["reason"] == "malformed_model_output"
+
+
+def test_mixed_list_preserves_valid_and_rejects_junk():
+    fa = _make_analyzer([{"name": CANON, "evidence": "real", "confidence_score": 0.9}, 42])
+    fa._update_potentially_vulnerable_function()
+    assert list(fa.potentially_vulnerable_functions) == [CANON]
+    assert fa.rejected_findings[0]["reason"] == "malformed_model_output"
