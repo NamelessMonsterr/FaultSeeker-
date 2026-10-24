@@ -117,3 +117,39 @@ def test_real_pipeline_to_console_annotation(valid, monkeypatch):
     assert report['analysis_integrity']['unverified_targets'] == []
     assert len(report['scored_functions']) == int(valid)
     assert any('excluded from scoring' in line for line in report['limitations'])
+
+
+@pytest.mark.parametrize('record', [None, [], {'evidence': 'claimed fault'}])
+def test_malformed_canonical_value_survives_pipeline_as_rejected(record):
+    result = pipeline_from_model({CANON: record}).analyze_transaction(txn_hash='0xabc123', chain='eth')
+    assert result['scored_functions'] == []
+    assert len(result['rejected_findings']) == 1
+    assert result['rejected_findings'][0]['reason'] == 'malformed_model_output'
+
+
+def test_empty_object_remains_legitimate_no_findings():
+    result = pipeline_from_model({}).analyze_transaction(txn_hash='0xabc123', chain='eth')
+    assert result['scored_functions'] == []
+    assert result['rejected_findings'] == []
+
+
+@pytest.mark.parametrize('record', [None, [], {'evidence': 'claimed fault'}])
+def test_malformed_canonical_value_forces_partial_in_console(record, monkeypatch):
+    console = os.getenv('CONSOLE_REPO_PATH')
+    if not console:
+        pytest.skip('Set CONSOLE_REPO_PATH to enable companion console annotation')
+    monkeypatch.syspath_prepend(console)
+    identity = importlib.import_module('app.trace_identity')
+    guards = importlib.import_module('app.pipeline_guards')
+    fixture = json.loads((Path(console) / 'tests/fixtures/hedgey_verified_trace.json').read_text())
+    tx = fixture['provenance']['transaction_hash']
+    seq = identity.sequence_from_parity(fixture['responses']['trace_transaction'], tx, 'eth')
+    root = seq['trace']
+    key = f"{root['function']}_{root['address']}"
+    result = pipeline_from_model({key: record}, root['function'], root['address']).analyze_transaction(txn_hash=tx, chain='eth')
+    runtime = guards.PipelineRuntime(tx, 'eth')
+    runtime.sequence = seq
+    report = runtime.annotate_result(result)
+    assert report['analysis_status'] == 'partial'
+    assert report['classification']['rule_verdict'] == 'INCONCLUSIVE'
+    assert report['scored_functions'] == []

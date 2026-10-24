@@ -178,3 +178,23 @@ def test_mixed_list_preserves_valid_and_rejects_junk():
     fa._update_potentially_vulnerable_function()
     assert list(fa.potentially_vulnerable_functions) == [CANON]
     assert fa.rejected_findings[0]["reason"] == "malformed_model_output"
+
+
+@pytest.mark.parametrize('record', [None, [], {'evidence': 'claimed fault'},
+    {'evidence': 'claimed fault', 'confidence_score': 'nonsense'},
+    {'evidence': 'claimed fault', 'confidence_score': float('nan')},
+    {'evidence': 'claimed fault', 'confidence_score': True}])
+def test_canonical_key_malformed_value_rejected(record):
+    fa = _make_analyzer({CANON: record})
+    fa._update_potentially_vulnerable_function()
+    assert fa.potentially_vulnerable_functions == {}
+    assert len(fa.rejected_findings) == 1
+    assert fa.rejected_findings[0]['reason'] == 'malformed_model_output'
+
+
+@pytest.mark.parametrize('confidence', [0, 0.9, 90, '90%', 'high'])
+def test_usable_confidence_forms_preserved(confidence):
+    fa = _make_analyzer({CANON: {'evidence': 'claimed fault', 'confidence_score': confidence}})
+    fa._update_potentially_vulnerable_function()
+    assert fa.potentially_vulnerable_functions[CANON]['confidence_score'] == [confidence]
+    assert fa.rejected_findings == []

@@ -3,6 +3,7 @@ import sys
 import re
 import json
 import logging
+import math
 import networkx as nx
 from copy import deepcopy
 import time
@@ -372,30 +373,41 @@ class FunctionAnalyzer:
                 self.rejected_findings.append(_rej)
                 print(f"   [!] rejecting unbindable vuln candidate {str(_rk)[:80]!r}: not an observed call id", flush=True)
         result = _accepted
-        for key in result:
+        for key, record in result.items():
             try:
-                evidence = ''
-                confidence_score = ''
-                if isinstance(result[key],list) or isinstance(result[key],tuple):
-                    evidence = result[key][0]
-                    confidence_score = result[key][1]
-                elif isinstance(result[key],dict):
-                    _rec = result[key]
-                    evidence = _rec.get('evidence', _rec.get('reason', _rec.get('description', _rec.get('rationale', ''))))
-                    confidence_score = _rec.get('confidence_score', _rec.get('confidence', _rec.get('score', '')))
-                if confidence_score not in ('', None):
-                    if key not in self.potentially_vulnerable_functions:
-                        self.potentially_vulnerable_functions[key] = {
-                            'confidence_score': [confidence_score],
-                            'evidence': [evidence],
-                            'depth': self._get_function_call_depth(key),
-                        }
-                    else:
-                        self.potentially_vulnerable_functions[key]['confidence_score'].append(confidence_score)
-                        self.potentially_vulnerable_functions[key]['evidence'].append(evidence)
-            except Exception as _reg_err:
-                print(f"   [!] dropping unparseable vuln candidate {str(key)[:80]!r}: {type(_reg_err).__name__} {_reg_err}", flush=True)
-    
+                if isinstance(record, (list, tuple)) and len(record) >= 2:
+                    evidence, confidence_score = record[:2]
+                elif isinstance(record, dict):
+                    evidence = record.get('evidence', record.get('reason', record.get('description', record.get('rationale', ''))))
+                    confidence_score = record.get('confidence_score', record.get('confidence', record.get('score')))
+                else:
+                    raise ValueError('candidate must be an object or evidence/confidence pair')
+                if not (isinstance(evidence, str) and evidence.strip()):
+                    raise ValueError('candidate requires nonempty text evidence')
+                # Match the scorer's supported confidence forms, but reject
+                # missing, boolean, nonfinite and unusable values explicitly.
+                labels = ('high', 'very high', 'medium', 'moderate', 'low', 'very low')
+                if isinstance(confidence_score, str) and confidence_score.strip().lower() in labels:
+                    pass
+                else:
+                    if isinstance(confidence_score, bool) or not isinstance(confidence_score, (int, float, str)):
+                        raise ValueError('candidate requires usable confidence')
+                    numeric = float(str(confidence_score).strip().rstrip('%'))
+                    if not math.isfinite(numeric) or not 0 <= numeric <= 100:
+                        raise ValueError('candidate confidence must be finite and between 0 and 100')
+                depth = self._get_function_call_depth(key)
+                if key not in self.potentially_vulnerable_functions:
+                    self.potentially_vulnerable_functions[key] = {
+                        'confidence_score': [confidence_score], 'evidence': [evidence], 'depth': depth}
+                else:
+                    self.potentially_vulnerable_functions[key]['confidence_score'].append(confidence_score)
+                    self.potentially_vulnerable_functions[key]['evidence'].append(evidence)
+            except Exception as error:
+                self.rejected_findings.append({
+                    'key': str(key), 'reason': 'malformed_model_output',
+                    'detail': f'candidate record could not be parsed: {type(error).__name__}'})
+                print(f"   [!] rejecting malformed vuln candidate {str(key)[:80]!r}", flush=True)
+
     def _update_children_call_memo(self, function_call, function_name=''):
         for i in function_call:
             if (i['function'] == function_name) and (i['call_type'] == 'delegatecall'):
