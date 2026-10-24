@@ -67,6 +67,7 @@ class FunctionAnalyzer:
         self.children_call_memo_single = {}
         self.children_call_memo = {}
         self.repeated_patterns = []
+        self.rejected_findings = []
 
     def _stage(self, name):
         """Time a pipeline stage when a CostTracker is attached, else no-op."""
@@ -318,7 +319,7 @@ class FunctionAnalyzer:
         prompt = self.vulnerability_prompts.update_potentially_vulnerable_function
         # Cheatsheet FIRST: the agent layer truncates prompts to 10k chars
         # keeping the head, so the strongest hint must not sit at the tail.
-        prompt += 'The following function calls have been confirmed to be vulnerable, if it is in the provided information, please add it to the returned JSON with the predefined format: ' + str(self.cheatsheet)
+        prompt += 'The following function calls have been confirmed to be vulnerable, if it is in the provided information, please add it to the returned JSON with the predefined format, using the exact candidate_functions call id as the JSON key: ' + str(self.cheatsheet)
         prompt += "Current understanding:" + self.understanding_result
         prompt += "Current task:" + json.dumps(self.current_task)
         prompt += 'Analysis result of current task:' + json.dumps(self.processing_result)
@@ -346,6 +347,33 @@ class FunctionAnalyzer:
                         _unwrapped[_item['name']] = {k: v for k, v in _item.items() if k != 'name'}
                 if _unwrapped:
                     result = _unwrapped
+        # Canonical-target echo binding: a candidate key is accepted only when
+        # it exactly names an observed call id - either a functions_to_be_inspected
+        # key or a trace-derived function_call_loc_memo entry ("name::address").
+        # The model is shown these canonical ids (cheatsheet candidate_functions),
+        # so an honest finding can echo one verbatim. Renamed or fabricated
+        # targets are rejected into rejected_findings (never scored) instead of
+        # being adopted under an invented identity. No inference is attempted:
+        # unknown keys are never repaired by address or name similarity.
+        _known_ids = set(self.functions_to_be_inspected or {})
+        for _mk in ((self.tx_analysis or {}).get('function_call_loc_memo') or {}):
+            _known_ids.add(_mk.replace('::', '_', 1))
+        _known_norm = {_kid.lower(): _kid for _kid in _known_ids}
+        _accepted = {}
+        for _rk in result:
+            _canon = _rk if _rk in _known_ids else _known_norm.get(str(_rk).lower())
+            if _canon is not None:
+                _accepted[_canon] = result[_rk]
+            else:
+                _rej = {'key': str(_rk), 'reason': 'unbindable_target',
+                        'detail': 'returned id is not an observed function call id'}
+                if isinstance(result[_rk], dict):
+                    _rej['evidence'] = result[_rk].get('evidence', result[_rk].get('reason', ''))
+                elif isinstance(result[_rk], (list, tuple)) and result[_rk]:
+                    _rej['evidence'] = result[_rk][0]
+                self.rejected_findings.append(_rej)
+                print(f"   [!] rejecting unbindable vuln candidate {str(_rk)[:80]!r}: not an observed call id", flush=True)
+        result = _accepted
         for key in result:
             try:
                 evidence = ''
@@ -902,6 +930,7 @@ class FunctionAnalyzer:
         self.txn_hash = forensics_result.transaction_hash
         self.cheatsheet = []
         self.potentially_vulnerable_functions = {}
+        self.rejected_findings = []
         self.understanding_result = ''
         self.children_call_memo = {}
         self.children_call_memo_single = {}
@@ -1001,6 +1030,7 @@ class FunctionAnalyzer:
             'ranked_result': self.ranked_result,
             'potentially_vulnerable_functions': self.potentially_vulnerable_functions,
             'finalized_vulnerable_functions': finalized_functions,
+            'rejected_findings': self.rejected_findings,
             'transaction_understanding': self.understanding_result,
             'functions_to_be_inspected': self.functions_to_be_inspected,
             # ── Signal layer (from Stage 1) ───────────────────────────────
