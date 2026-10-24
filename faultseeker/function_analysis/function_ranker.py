@@ -77,11 +77,14 @@ class FunctionRanker:
                                if (i['function'] is None) or
                                (i['function'].lower() in self.filtered_functions)])
 
-                    if check == 0:
+                    if check < len(pattern['pattern']):
+                        # Dedup on the pattern's REAL signature (function names
+                        # + addresses). The old key used only filtered-out
+                        # functions, collapsing every all-unfiltered pattern to
+                        # '' and silently dropping all but the first.
                         repeated_memo_key = ','.join([
-                            i['function'] for i in pattern['pattern']
-                            if (i['function'] is None) or
-                            (i['function'].lower() in self.filtered_functions)
+                            f"{i.get('function')}@{i.get('address')}"
+                            for i in pattern['pattern']
                         ])
 
                         if repeated_memo_key not in repeated_patterns_memo:
@@ -95,6 +98,8 @@ class FunctionRanker:
 
         # Process calls with created contracts in params
         for call in forensics_result.address_calls_with_created_contract:
+            if not call.get('function'):
+                continue
             if call['function'].lower() in self.extended_filtered_functions:
                 continue
 
@@ -116,7 +121,8 @@ class FunctionRanker:
                 address_calls_with_created_contract_in_params[key]['calls'].append({
                     'gas': call['gas'],
                     'address': call['address'],
-                    'params': call['params'] if len(call['params']) < 200 else f"{call['params'][:200]}...",
+                    'params': call['params'] if len(call['params']) < 2000 else f"{call['params'][:2000]}...",
+                    'params_hash': __import__('hashlib').sha1(str(call['params']).encode()).hexdigest()[:12],
                     'depth': call['depth']
                 })
                 if call['address'] not in address_calls_with_created_contract_in_params[key]['address']:
@@ -126,6 +132,8 @@ class FunctionRanker:
         for _, value in forensics_result.functions_to_be_inspected.items():
             if value:
                 for call in value:
+                    if not call.get('function'):
+                        continue
                     if call['function'].lower() in self.extended_filtered_functions:
                         continue
 
@@ -145,13 +153,18 @@ class FunctionRanker:
                         functions_to_be_inspected[key]['count'] += 1
                         functions_to_be_inspected[key]['calls'].append({
                             'gas': call['gas'],
-                            'params': call['params'] if len(call['params']) < 200 else f"{call['params'][:200]}...",
+                            'params': call['params'] if len(call['params']) < 2000 else f"{call['params'][:2000]}...",
+                    'params_hash': __import__('hashlib').sha1(str(call['params']).encode()).hexdigest()[:12],
                             'depth': call['depth']
                         })
 
         # Fallback: if no functions found, use function_call_loc_memo
         if len(functions_to_be_inspected) == 0:
             for function_call in tx_analysis['function_call_loc_memo']:
+                if '::' in function_call:
+                    _fb_addr = function_call.rsplit('::', 1)[1]
+                    if _fb_addr not in address_list:
+                        address_list.append(_fb_addr)  # was empty: source downloads never ran for fallback functions
                 function_call_key = function_call.replace('::', '_')
                 function_call_value = {
                     'count': len(tx_analysis['function_call_loc_memo'][function_call]),

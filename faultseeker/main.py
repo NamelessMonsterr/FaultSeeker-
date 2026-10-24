@@ -1,14 +1,10 @@
 import argparse
 import json
 import os
+import re
 from datetime import datetime
 
-from faultseeker.core.auto_model_selector import (
-    interactive_model_selection,
-    print_model_selection,
-)
-from faultseeker.core.config import FaultSeekerConfig
-from faultseeker.core.pipeline import FaultSeekerPipeline
+from faultseeker.forensics.result import compute_priority_breakdown, extract_reentrancy_analysis
 
 
 def banner():
@@ -28,6 +24,190 @@ def _resolve_output(output_dir: str, output_path: str = None) -> tuple[str, str]
     return output_dir, os.path.join(output_dir, f"analysis_{timestamp}.json")
 
 
+def _parse_offline_txn_link(txn_link: str) -> tuple[str, str]:
+    """Parse a supported explorer link without importing the live pipeline."""
+    match = re.search(r"(0x[0-9a-fA-F]{64})", txn_link)
+    if not match:
+        raise ValueError(f"Could not extract transaction hash from link: {txn_link}")
+    link = txn_link.lower()
+    chain_map = (
+        ("bscscan", "bsc"), ("bsc", "bsc"),
+        ("polygonscan", "polygon"), ("polygon", "polygon"),
+        ("arbiscan", "arbitrum"), ("arbitrum", "arbitrum"),
+        ("optimistic.etherscan", "optimism"), ("optimism", "optimism"),
+        ("snowtrace", "avalanche"), ("avalanche", "avalanche"),
+        ("basescan", "base"), ("base", "base"),
+        ("ftmscan", "fantom"), ("fantom", "fantom"),
+        ("explorer.zksync", "zksync"), ("zksync", "zksync"),
+        ("gnosisscan", "gnosis"), ("gnosis", "gnosis"),
+        ("etherscan", "eth"), ("eth", "eth"),
+    )
+    for keyword, chain in chain_map:
+        if keyword in link:
+            return match.group(1), chain
+    raise ValueError(f"The blockchain network is not supported: {txn_link}")
+
+
+def _offline_stage1_result(txn_hash: str, chain: str, cache_dir: str) -> dict:
+    """Build a deterministic no-LLM Stage-1 report from local data only.
+
+    Offline mode deliberately does not instantiate the normal pipeline.  A
+    previously saved Stage-1 forensics report is used when available; without
+    one, the returned report is an explicit deterministic demo/triage result.
+    No RPC, explorer, model, or provider is contacted from this path.
+    """
+    cache_path = os.path.join(cache_dir, "forensics", f"{txn_hash}.json")
+    cached = None
+    if os.path.isfile(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                candidate = json.load(f)
+            if isinstance(candidate, dict):
+                transaction = candidate.get("transaction", {}) or {}
+                cached_hash = transaction.get("hash", "")
+                cached_chain = transaction.get("chain", "")
+                if (isinstance(cached_hash, str) and isinstance(cached_chain, str)
+                        and cached_hash.lower() == txn_hash.lower()
+                        and cached_chain.lower() == chain.lower()):
+                    cached = candidate
+        except (OSError, ValueError, TypeError):
+            cached = None
+
+    if cached is None:
+        signals = {
+            "offline_demo": True,
+            "data_source": "local_input_only",
+            "coverage": {
+                "trace_complete": False,
+                "token_flow_complete": False,
+                "multi_tx_context_complete": False,
+            },
+        }
+        transaction_understanding = (
+            "No local Stage-1 cache was found; deterministic demo triage only."
+        )
+        matched_rule = ""
+        verdict = "UNCERTAIN"
+        confidence = 0.0
+        ranked_functions = []
+        attackers = []
+        victims = []
+        balance_changes = {}
+        functions_to_inspect = {}
+        cache_used = False
+    else:
+        classification = cached.get("classification", {}) or {}
+        attack = cached.get("attack_analysis", {}) or {}
+        function_analysis = cached.get("function_analysis", {}) or {}
+        signals = classification.get("signals", {}) or {}
+        matched_rule = classification.get("matched_rule", "")
+        verdict = classification.get("rule_verdict", "UNKNOWN")
+        confidence = float(classification.get("rule_confidence", 0.0) or 0.0)
+        transaction_understanding = (
+            "Deterministic Stage-1 triage loaded from the local forensics cache."
+        )
+        functions_to_inspect = function_analysis.get("functions_to_inspect", {}) or {}
+        ranked_functions = []
+        for category in (
+            "flashloan_callback",
+            "function_name_with_hash",
+            "call_with_created_contract",
+            "function_name_with_hash_children",
+            "others",
+        ):
+            ranked_functions.extend(functions_to_inspect.get(category, []) or [])
+        attackers = attack.get("potential_attackers", []) or []
+        victims = attack.get("potential_victims", []) or []
+        balance_changes = attack.get("balance_changes", {}) or {}
+        cache_used = True
+
+    priority = compute_priority_breakdown(signals, exploitability_score=confidence)
+    return {
+        "transaction_hash": txn_hash,
+        "chain": chain,
+        "analysis_mode": "offline-no-llm",
+        "analysis_status": "stage1_complete",
+        "stage_completed": "stage1",
+        "stage2_bypassed": True,
+        "analysis_complete": True,
+        "cache_used": cache_used,
+        "verdict": verdict,
+        "rule_verdict": verdict,
+        "rule_confidence": confidence,
+        "matched_rule": matched_rule,
+        "reclassification_locked": False,
+        "ranked_suspicious_functions": ranked_functions,
+        "potentially_vulnerable_functions": [],
+        "transaction_understanding": transaction_understanding,
+        "scored_functions": [],
+        "signals": signals,
+        "evidence_cards": [],
+        "rejected_findings": [],
+        "finding_count": 0,
+        "reentrancy": extract_reentrancy_analysis(signals),
+        "priority": priority,
+        "priority_score": priority["total"],
+        "potential_attackers": attackers,
+        "potential_victims": victims,
+        "balance_changes": balance_changes,
+        "functions_to_inspect": functions_to_inspect,
+        "analyst_feedback": [],
+        "analysis_context": {"offline": True, "cache_path": cache_path if cache_used else None},
+        "llm_cost": 0.0,
+        "query_records": [],
+        "duration": 0.0,
+        "limitations": [
+            "No LLM or provider was constructed or called.",
+            "Stage 2 function analysis was intentionally skipped.",
+            "No network/RPC request is made by offline mode; uncached input is demo triage only.",
+        ],
+    }
+
+
+def _no_llm_stage1_result(txn_hash: str, chain: str, cache_dir: str) -> dict:
+    """Run deterministic Stage 1 through free/public acquisition only.
+
+    This path constructs the real forensics orchestrator but never constructs
+    Stage 2 agents or sends an LLM request. It is intended for live demos.
+    """
+    # The repository's RPC module loads `.env` at import time. Disable that
+    # behavior for this mode so a demo can never silently select a configured
+    # paid endpoint or model credential; only built-in public RPC fallbacks are
+    # eligible here.
+    os.environ["PYTHON_DOTENV_DISABLED"] = "true"
+    from faultseeker.forensics.orchestrator import ForensicsOrchestrator
+
+    orchestrator = ForensicsOrchestrator(
+        model="offline-no-llm",
+        cache_dir=os.path.join(cache_dir, "forensics"),
+    )
+    forensics_result, txn_seq, txn_info = orchestrator.run(txn_hash, chain)
+    if not forensics_result:
+        raise RuntimeError(
+            "Stage 1 could not acquire or analyze this transaction with the "
+            "available free explorer/RPC providers"
+        )
+
+    result = forensics_result.to_dict(include_internal=False)
+    result.update({
+        "analysis_mode": "no-llm-free-rpc",
+        "analysis_status": "stage1_complete",
+        "stage_completed": "stage1",
+        "stage2_bypassed": True,
+        "analysis_complete": True,
+        "rpc_source": (txn_info or {}).get("_source", "unknown"),
+        "trace_coverage": (txn_seq or {}).get("trace_coverage", {}),
+        "llm_cost": 0.0,
+        "query_records": [],
+        "limitations": [
+            "No LLM or provider was constructed or called.",
+            "Stage 2 function analysis was intentionally skipped.",
+            "Function localization and calibrated Stage 3 scores are not present.",
+        ],
+    })
+    return result
+
+
 def main(
     txn_link: str = None,
     txn_hash: str = None,
@@ -42,6 +222,8 @@ def main(
     track_cost: bool = False,
     local_model: str = None,
     human_in_loop: bool = False,
+    offline: bool = False,
+    no_llm: bool = False,
 ):
     banner()
     print("\nTransaction Information:")
@@ -52,6 +234,39 @@ def main(
         print(f"   * Chain: {chain.upper()}")
     else:
         raise ValueError("Either txn_link or both txn_hash and chain must be provided.")
+
+    if offline and txn_link:
+        txn_hash, chain = _parse_offline_txn_link(txn_link)
+    if offline:
+        chain = (chain or "").lower()
+        output_dir, output_path = _resolve_output(output_dir, output_path)
+        os.makedirs(output_dir, exist_ok=True)
+        print("\nOffline/no-LLM mode: running deterministic Stage 1 only")
+        result = _offline_stage1_result(txn_hash, chain, cache_dir)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2)
+        print(f"   Results saved to: {output_path}")
+        print("   Stage 2 skipped; no model, provider, RPC, or explorer call was made")
+        return result
+
+    if no_llm:
+        chain = (chain or "").lower()
+        output_dir, output_path = _resolve_output(output_dir, output_path)
+        os.makedirs(output_dir, exist_ok=True)
+        print("\nNo-LLM mode: running real deterministic Stage 1 via free/public RPC")
+        result = _no_llm_stage1_result(txn_hash, chain, cache_dir)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2)
+        print(f"   Results saved to: {output_path}")
+        print("   Stage 2 skipped; no model/provider call was made")
+        return result
+
+    from faultseeker.core.auto_model_selector import (
+        interactive_model_selection,
+        print_model_selection,
+    )
+    from faultseeker.core.config import FaultSeekerConfig
+    from faultseeker.core.pipeline import FaultSeekerPipeline
 
     auto_route_enabled = auto_route
     local_model_name = local_model
@@ -171,6 +386,8 @@ def run_analysis(
     explain: bool = False,
     track_cost: bool = False,
     human_in_loop: bool = False,
+    offline: bool = False,
+    no_llm: bool = False,
 ) -> dict:
     """Importable entry point for eval scripts and cross-chain runs."""
     forensics_model = local_model if local_model else model
@@ -186,6 +403,8 @@ def run_analysis(
         track_cost=track_cost,
         local_model=local_model,
         human_in_loop=human_in_loop,
+        offline=offline,
+        no_llm=no_llm,
     )
 
 
@@ -251,6 +470,18 @@ def main_cli():
         default=False,
         help="Enable analyst interaction at key checkpoints",
     )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        default=False,
+        help="Strict local-only demo mode: use a local Stage-1 cache/input and skip Stage 2",
+    )
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        default=False,
+        help="No-LLM live demo mode: use free/public acquisition for deterministic Stage 1 only",
+    )
 
     args = parser.parse_args()
 
@@ -271,6 +502,8 @@ def main_cli():
             track_cost=args.track_cost,
             local_model=args.local_model,
             human_in_loop=args.human_in_loop,
+            offline=args.offline,
+            no_llm=args.no_llm,
         )
     except Exception as e:
         print(f"\nError: {e}")

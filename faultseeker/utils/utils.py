@@ -308,9 +308,12 @@ def is_function_hash(function_name):
 
 
 def build_agent(task, model):
-    model = model.strip().lower()
+    """Build an agent for `model`, routing cloud models to their provider.
 
-    if model.startswith('gpt'):
-        return GPTAgent(task, model)
-    else:
-        return OllmaAgent(task, model)
+    Previously everything non-GPT fell through to OllmaAgent (local Ollama),
+    which silently broke gemini-*/grok-*/qwen-* on hosts without Ollama.
+    Delegate to build_provider_agent, which maps provider prefixes to the
+    right OpenAI-compatible endpoint and fails fast on unsupported ones.
+    """
+    from faultseeker.utils.agent import build_provider_agent
+    return build_provider_agent(task, model.strip().lower())

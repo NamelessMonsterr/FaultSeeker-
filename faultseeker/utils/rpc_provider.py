@@ -490,6 +490,20 @@ def rpc_call(chain: str, method: str, params: list,
     if not providers:
         raise RuntimeError(f'No RPC providers for chain: {chain}')
 
+    # Trace methods decide analysis quality. When the operator explicitly set
+    # {CHAIN}_RPC_URL (e.g. an archive/trace-capable endpoint), pin trace calls
+    # to it and fail LOUD on error - silently rotating to public RPCs (which
+    # 403 on debug_*) is how runs came out empty with no visible error.
+    _explicit = os.getenv(f'{canonical.upper()}_RPC_URL', '').strip()
+    if _explicit and (method.startswith('debug_') or method.startswith('trace_')):
+        providers = [p for p in providers if p.url == _explicit]
+        if not providers:
+            raise RuntimeError(
+                f'{canonical.upper()}_RPC_URL is set but not in the provider registry')
+        _pinned = True
+    else:
+        _pinned = False
+
     last_err = None
     for provider in providers:
         if provider.is_circuit_open:
@@ -518,6 +532,10 @@ def rpc_call(chain: str, method: str, params: list,
             last_err = exc
 
     _registry.log_state(canonical)
+    if _pinned:
+        raise RuntimeError(
+            f'Pinned trace RPC ({canonical.upper()}_RPC_URL) failed for {method}: {last_err}. '
+            f'Fix the endpoint or unset it - NOT falling back to public RPCs (thin trace = empty results).')
     raise RuntimeError(f'All providers failed for {chain}:{method}. Last: {last_err}')
 
 
@@ -866,6 +884,57 @@ def normalize_trace_node(node: dict, depth: int = 0, call_id: str = '0') -> dict
         'to':        callee,
         'from':      caller,
     }
+
+
+def extract_storage_writes_from_prestate_diff(diff: dict, root_trace: dict | None = None) -> list[dict]:
+    """
+    Build canonical SSTORE events from a prestateTracer diffMode result
+    ({'pre': {addr: {storage: {slot: val}}}, 'post': {...}}).
+
+    Same output shape as extract_storage_writes_from_struct_logs, except pc is
+    None (not available without opcode logs) and after_external_call is always
+    False (not derivable from a state diff). Used as fallback for providers
+    that support prestateTracer but not the raw structLogger (e.g. dRPC).
+    """
+    if not isinstance(diff, dict):
+        return []
+    pre = diff.get('pre') or {}
+    post = diff.get('post') or {}
+    if not isinstance(post, dict):
+        return []
+
+    events: list[dict] = []
+    idx = 0
+    for addr, post_state in post.items():
+        if not isinstance(post_state, dict):
+            continue
+        post_storage = post_state.get('storage') or {}
+        pre_state = pre.get(addr) or pre.get(str(addr).lower()) or {}
+        pre_storage = pre_state.get('storage') or {} if isinstance(pre_state, dict) else {}
+        for slot, value_after in post_storage.items():
+            norm_slot = _normalize_word_hex(slot)
+            if not norm_slot:
+                continue
+            value_before = None
+            if isinstance(pre_storage, dict):
+                value_before = _normalize_word_hex(
+                    pre_storage.get(slot)
+                    or pre_storage.get(str(slot).lower())
+                    or pre_storage.get(norm_slot)
+                )
+            events.append({
+                'address': str(addr).lower(),
+                'slot': norm_slot,
+                'value_before': value_before,
+                'value_after': _normalize_word_hex(value_after),
+                'pc': None,
+                'depth': 1,
+                'call_id': '0',
+                'event_index': idx,
+                'after_external_call': False,
+            })
+            idx += 1
+    return events
 
 
 def extract_storage_writes_from_struct_logs(struct_logs: list[dict], root_trace: dict | None = None) -> list[dict]:

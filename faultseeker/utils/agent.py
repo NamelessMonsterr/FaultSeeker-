@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 # ── Local model tuning constants ──────────────────────────────────────────────
-LOCAL_MODEL_TIMEOUT_SECS = 2       # Hard timeout per Ollama call (reduced for fast fail-fast when offline)
+LOCAL_MODEL_TIMEOUT_SECS = int(os.getenv('FAULTSEEKER_LOCAL_MODEL_TIMEOUT_SECS', '600'))  # per Ollama call; 2s was guaranteed-failure for any real local inference
 LOCAL_MODEL_NUM_CTX      = 4096    # Explicit context window for Ollama
 LOCAL_MODEL_MAX_PROMPT   = 6000    # Truncate prompts longer than this (chars)
 LOCAL_MODEL_MAX_TURNS    = 2       # History turns to keep for local models
@@ -35,6 +35,21 @@ PROVIDER_CONFIG = {
     'qwen-':    ('https://dashscope.aliyuncs.com/compatible-mode/v1',            'DASHSCOPE_API_KEY'),
     # Google Gemini (OpenAI-compatible endpoint)
     'gemini-':  ('https://generativelanguage.googleapis.com/v1beta/openai/',     'GOOGLE_API_KEY'),
+    # NaraRouter / bynara (OpenAI-compatible free router, 7M tokens/day)
+    'agnes':    ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'jev':      ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'laguna':   ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'nemotron': ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'minimax':  ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    # GroqCloud (OpenAI-compatible, free dev tier)
+    'llama-':   ('https://api.groq.com/openai/v1',                             'GROQ_API_KEY'),
+    'qwen/':    ('https://api.groq.com/openai/v1',                             'GROQ_API_KEY'),
+    'openai/gpt-oss': ('https://api.groq.com/openai/v1',                       'GROQ_API_KEY'),
+    'allam-':   ('https://api.groq.com/openai/v1',                             'GROQ_API_KEY'),
+    # NVIDIA NIM (OpenAI-compatible; free tier ~40 RPM, dashed live model ids)
+    'z-ai/':        ('https://integrate.api.nvidia.com/v1',                          'NVIDIA_API_KEY'),
+    'deepseek-ai/': ('https://integrate.api.nvidia.com/v1',                          'NVIDIA_API_KEY'),
+    'nvidia/':      ('https://integrate.api.nvidia.com/v1',                          'NVIDIA_API_KEY'),
     # Anthropic Claude (NB: not OpenAI-compatible natively — requires anthropic sdk)
     'claude-':  ('https://api.anthropic.com/v1',                                 'ANTHROPIC_API_KEY'),
 }
@@ -47,6 +62,86 @@ JSON_MODE_MODELS = {
     'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash',
     'qwen-plus', 'qwen-turbo', 'qwen-max',
 }
+
+
+def _parse_api_keys(raw):
+    """Tolerant multi-key parse: newline/comma/space separated, .env-style
+    VAR= prefixes tolerated (only *_API_KEY* assignments count)."""
+    out = []
+    for tok in re.split(r"[\s,;]+", (raw or '').strip()):
+        tok = tok.strip().strip('"').strip("'")
+        if not tok:
+            continue
+        if '=' in tok:
+            name, _, tok = tok.partition('=')
+            if 'API_KEY' not in name:
+                continue
+        tok = tok.strip()
+        if tok:
+            out.append(tok)
+    return out
+
+
+# ── Bounded LLM calls (console demo hardening) ────────────────────────────────
+# Without an explicit client timeout the OpenAI SDK waits ~600s per attempt and
+# retries internally, so one slow provider wedged a whole analysis run. These
+# knobs bound every call; auth/quota failures are re-raised so the console's
+# per-key rotation can engage instead of silently producing empty output.
+LLM_CALL_TIMEOUT_SECS = int(os.getenv('FAULTSEEKER_LLM_TIMEOUT_SECS', '120'))
+LLM_CALL_RETRIES = int(os.getenv('FAULTSEEKER_LLM_RETRIES', '6'))
+# NaraRouter-class routers flap ~30% of calls (429/5xx/slow); give them room.
+LLM_RETRY_BACKOFF_LADDER = [5, 15, 45, 90]
+
+
+def _llm_call_with_retry(create_client, kwargs, model):
+    """One chat.completions.create with bounded timeout + limited retries.
+
+    Raises on auth/quota/not-found (caller rotates keys or fails fast) and on
+    exhausted transient failures; returns the completion on success.
+    """
+    import random
+    from openai import (APITimeoutError, APIConnectionError, RateLimitError,
+                        AuthenticationError, PermissionDeniedError, NotFoundError,
+                        BadRequestError, APIStatusError)
+    transient = (APITimeoutError, APIConnectionError, RateLimitError)
+    attempt = 0
+    while True:
+        client = create_client()
+        try:
+            return client.chat.completions.create(**kwargs)
+        except (AuthenticationError, PermissionDeniedError, NotFoundError):
+            raise                      # key/model problem: rotation-worthy
+        except BadRequestError as e:
+            msg = str(e).lower()
+            if 'api key' in msg or 'incorrect api key' in msg or 'invalid api key' in msg:
+                import httpx as _httpx
+                raise AuthenticationError(str(e), response=_httpx.Response(401, request=_httpx.Request('POST', 'https://auth.invalid')), body=None)
+            raise                      # genuine request problem: do not retry
+        except transient as e:
+            # NB: RateLimitError subclasses APIStatusError, so this clause MUST
+            # come before `except APIStatusError` or 429s re-raise instantly
+            # with zero retries (the hollow-run bug).
+            attempt += 1
+            if attempt > LLM_CALL_RETRIES:
+                raise                  # let the caller rotate keys / fail loudly
+            backoff = LLM_RETRY_BACKOFF_LADDER[min(attempt - 1, len(LLM_RETRY_BACKOFF_LADDER) - 1)] + random.uniform(0, 3)
+            # Honor provider hints ("try again in 12.3s") when they exceed the ladder.
+            _m = re.search(r'try again in ([0-9.]+)s', str(e), re.I)
+            if _m:
+                backoff = min(max(backoff, float(_m.group(1)) + 3), 120)  # cap provider hints: an unbounded hint could sleep a worker for hours
+            print(f"   [!] LLM call to {model} failed ({type(e).__name__}, attempt {attempt}); retrying in {int(backoff)}s...", flush=True)
+            time.sleep(backoff)
+        except APIStatusError as e:
+            # Router-side 5xx flaps are transient; other status errors are not.
+            if getattr(e, 'status_code', 0) < 500:
+                raise
+            attempt += 1
+            if attempt > LLM_CALL_RETRIES:
+                raise
+            backoff = LLM_RETRY_BACKOFF_LADDER[min(attempt - 1, len(LLM_RETRY_BACKOFF_LADDER) - 1)] + random.uniform(0, 3)
+            print(f"   [!] LLM call to {model} failed ({type(e).__name__} {getattr(e, 'status_code', '')}, attempt {attempt}); retrying in {int(backoff)}s...", flush=True)
+            time.sleep(backoff)
+
 
 
 JSON_RETRY_PROMPT = (
@@ -65,7 +160,17 @@ class AbstractAgent(abc.ABC):
     ):
         self.model = model_name
         self.memory = []
+        self._memory_max_pairs = int(os.getenv('FAULTSEEKER_MEMORY_MAX_PAIRS', '20'))
         self._init_resources(task)
+
+    def _append_memory(self, message):
+        # Stored memory is capped (system prompt + last N pairs); only the copy
+        # SENT to the provider was truncated before, so long runs retained every
+        # prompt and reply forever -> slow memory growth on 512MB workers.
+        self.memory.append(message)
+        keep = self._memory_max_pairs * 2
+        if len(self.memory) > 1 + keep:
+            self.memory = [self.memory[0]] + self.memory[-keep:]
 
     def _init_resources(self, task):
         system_message = {
@@ -112,6 +217,9 @@ class AbstractAgent(abc.ABC):
           4. Regex extraction of first {...} or [...]
           5. eval() fallback (last resort)
         """
+        # Reasoning models (NIM/DeepSeek-class) wrap chain-of-thought in
+        # <think>...</think>; those braces break every strategy below.
+        text = re.sub(r'<think>[\s\S]*?</think>', '', text)
         # Strategy 1 — clean and direct parse
         cleaned = text.strip().strip('`').strip()
         try:
@@ -135,20 +243,50 @@ class AbstractAgent(abc.ABC):
             except Exception:
                 pass
 
-        # Strategy 4 — regex for first {...} or [...]
-        obj_match = re.search(r'(\{[\s\S]*\})', text)
-        if obj_match:
-            try:
-                return json.loads(obj_match.group(1))
-            except Exception:
-                pass
-
-        arr_match = re.search(r'(\[[\s\S]*\])', text)
-        if arr_match:
-            try:
-                return json.loads(arr_match.group(1))
-            except Exception:
-                pass
+        # Strategy 4 — balanced extraction of the FIRST complete {...} or [...].
+        # (The old greedy regex spanned the first '{' to the LAST '}', producing
+        # an invalid span on prose with braces or multiple JSON objects.)
+        def _balanced(t, open_ch, close_ch):
+            start = t.find(open_ch)
+            if start == -1:
+                return None
+            depth = 0
+            in_str = False
+            esc = False
+            quote = ''
+            for i in range(start, len(t)):
+                ch = t[i]
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif ch == '\\':
+                        esc = True
+                    elif ch == quote:
+                        in_str = False
+                    continue
+                if ch in ('"', "'"):
+                    in_str = True
+                    quote = ch
+                elif ch == open_ch:
+                    depth += 1
+                elif ch == close_ch:
+                    depth -= 1
+                    if depth == 0:
+                        return t[start:i+1]
+            return None
+        _obj_at = text.find('{')
+        _arr_at = text.find('[')
+        if _arr_at != -1 and (_obj_at == -1 or _arr_at < _obj_at):
+            _pairs = (('[', ']'), ('{', '}'))
+        else:
+            _pairs = (('{', '}'), ('[', ']'))
+        for _pair in _pairs:
+            _span = _balanced(text, *_pair)
+            if _span:
+                try:
+                    return json.loads(_span)
+                except Exception:
+                    pass
 
         # Strategy 5 — all structural parsing failed; do NOT eval() LLM output
         # (eval on untrusted text is a critical security vulnerability)
@@ -182,28 +320,38 @@ class AbstractAgent(abc.ABC):
         Query the LLM and retry up to max_retries times if the output
         is not valid JSON. On each retry, inject a correction prompt.
         """
+        _budget = int(os.getenv('FAULTSEEKER_MAX_QUERY_SECS', '900'))
+        _t0 = time.time()
         result_raw = self._send_message(user_message, temperature)
+        print(f"   [dbg] LLM raw reply ({self.model}): {str(result_raw)[:300]!r}", flush=True)
         retries = 0
         while retries <= max_retries:
+            if time.time() - _t0 > _budget:
+                print(f"[!] LLM query exceeded FAULTSEEKER_MAX_QUERY_SECS={_budget}s wall-clock budget; returning empty", flush=True)
+                return {}
             try:
                 return self._extract_json(result_raw)
             except ValueError:
                 retries += 1
                 if retries > max_retries:
                     logger.warning("JSON parsing failed after %d retries; returning empty dict", max_retries)
+                    print(f"[!] LLM response was not valid JSON after {max_retries} retries; last reply: {str(result_raw)[:200]!r}", flush=True)
                     return {}
                 logger.debug("JSON retry %d/%d", retries, max_retries)
-                result_raw = self._send_message(JSON_RETRY_PROMPT, 0.0)  # Force temp=0 on retries
+                result_raw = self._send_message(
+                    JSON_RETRY_PROMPT + "\n\nOriginal request - respond to THIS with valid JSON only:\n" + user_message[:4000],
+                    0.0)  # Force temp=0 on retries; re-include the request because history truncation drops it
 
     def query(self, user_message: str, temperature=0, format='json') -> Any:
         if format == 'str':
-            return self._send_message(user_message, temperature)
+            return self._send_message(user_message, temperature, force_json=False)
 
         # Use retry-enabled query for JSON formats
         try:
             return self._query_with_json_retry(user_message, temperature)
         except Exception as e:
             logger.error("query() failed completely: %s", e)
+            print(f"[!] LLM query failed ({type(e).__name__}): {str(e)[:300]}", flush=True)
             return {}
 
 
@@ -218,17 +366,21 @@ class OllmaAgent(AbstractAgent):
         truncated = message_pairs[-(max_turns * 2):]
         return [system_prompt] + truncated
 
-    def _send_message(self, user_message: str, temperature=0.0) -> str:
+    def _send_message(self, user_message: str, temperature=0.0, force_json=True) -> str:
         # Cap prompt length so local model context window isn't blown out
         start_time = time.time()
+        _prev = getattr(self, '_inflight_thread', None)
+        if _prev is not None and _prev.is_alive():
+            print(f"   [!] Local model '{self.model}' still busy with a previous call; failing fast instead of stacking leaked inference threads.", flush=True)
+            return ''
         if len(user_message) > LOCAL_MODEL_MAX_PROMPT:
             logger.warning(
                 "Prompt truncated: original length %d chars exceeds LOCAL_MODEL_MAX_PROMPT=%d",
                 len(user_message), LOCAL_MODEL_MAX_PROMPT,
             )
-            user_message = user_message[:LOCAL_MODEL_MAX_PROMPT] + "\n[TRUNCATED FOR LOCAL MODEL]"
+            user_message = user_message[:LOCAL_MODEL_MAX_PROMPT-2000] + "\n...[middle truncated for local model]...\n" + user_message[-2000:]
 
-        self.memory.append({"role": "user", "content": user_message})
+        self._append_memory({"role": "user", "content": user_message})
         result_container = [None]
         error_container  = [None]
         raw_response_container = [None]
@@ -250,25 +402,26 @@ class OllmaAgent(AbstractAgent):
 
         t = threading.Thread(target=_call, daemon=True)
         t.start()
+        self._inflight_thread = t
         t.join(timeout=LOCAL_MODEL_TIMEOUT_SECS)
 
         dur_ms = (time.time() - start_time) * 1000.0
 
         if t.is_alive():
             print(f"\n   [!] Local model '{self.model}' timed out after {LOCAL_MODEL_TIMEOUT_SECS}s. Returning empty.")
-            self.memory.append({"role": "assistant", "content": ""})
+            self._append_memory({"role": "assistant", "content": ""})
             self._record_router_query(len(user_message), 0, dur_ms)
             return ""
 
         if error_container[0]:
             err = error_container[0]
             print(f"   [!] Local model '{self.model}' error: {type(err).__name__}: {err}")
-            self.memory.append({"role": "assistant", "content": ""})
+            self._append_memory({"role": "assistant", "content": ""})
             self._record_router_query(len(user_message), 0, dur_ms)
             return ""
 
         assistant_response = result_container[0] or ""
-        self.memory.append({"role": "assistant", "content": assistant_response})
+        self._append_memory({"role": "assistant", "content": assistant_response})
 
         raw_resp = raw_response_container[0]
         inp_tok = raw_resp.get('prompt_eval_count') if isinstance(raw_resp, dict) else None
@@ -280,7 +433,7 @@ class OllmaAgent(AbstractAgent):
     def query(self, user_message: str, temperature=0.0, format='json') -> Any:
         """Override with local-model tuned settings: lower temp, more retries."""
         if format == 'str':
-            return self._send_message(user_message, temperature)
+            return self._send_message(user_message, temperature, force_json=False)
         try:
             return self._query_with_json_retry(
                 user_message, temperature=0.0,
@@ -297,6 +450,8 @@ class GPTAgent(AbstractAgent):
     def __init__(self, task, model_name):
         load_dotenv()
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not self.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is not set - GPTAgent cannot run without it (multi-key lists are only supported by UniversalAgent)")
         super().__init__(task, model_name=model_name)
 
     def _truncate_history(self, history, max_turns=1):
@@ -305,24 +460,27 @@ class GPTAgent(AbstractAgent):
         truncated = message_pairs[-(max_turns * 2):]
         return [system_prompt] + truncated
 
-    def _send_message(self, user_message, temperature=0):
-        client = OpenAI(api_key=self.openai_api_key)
+    def _send_message(self, user_message, temperature=0, force_json=True):
         start_time = time.time()
         try:
-            user_message = user_message[:10000]
-            self.memory.append({"role": "user", "content": user_message})
+            if len(user_message) > 10000:
+                user_message = user_message[:8000] + "\n...[middle truncated to fit context window]...\n" + user_message[-2000:]
+            self._append_memory({"role": "user", "content": user_message})
             kwargs = dict(
                 messages=self._truncate_history(self.memory),
                 model=self.model,
                 temperature=temperature,
             )
-            if self.model in JSON_MODE_MODELS or any(
+            if force_json and (self.model in JSON_MODE_MODELS or any(
                 self.model.startswith(p) for p in ('gpt-4o', 'gpt-4.1', 'gpt-4-turbo')
-            ):
+            )):
                 kwargs['response_format'] = {"type": "json_object"}
-            chat_completion = client.chat.completions.create(**kwargs)
+            chat_completion = _llm_call_with_retry(
+                lambda: OpenAI(api_key=self.openai_api_key,
+                               timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
+                kwargs, self.model)
             reply = chat_completion.choices[0].message.content or ""
-            self.memory.append({"role": "assistant", "content": reply})
+            self._append_memory({"role": "assistant", "content": reply})
 
             dur_ms = (time.time() - start_time) * 1000.0
             usage = getattr(chat_completion, 'usage', None)
@@ -332,7 +490,53 @@ class GPTAgent(AbstractAgent):
 
             return reply
         except Exception as e:
+            # Auth/quota/timeout failures must propagate so the console worker
+            # can rotate to a fallback key; only content-level problems are
+            # swallowed into an empty reply.
+            from openai import (APITimeoutError, APIConnectionError, RateLimitError,
+                                AuthenticationError, PermissionDeniedError, NotFoundError,
+                                APIStatusError)
+            transient_fail = isinstance(e, (APITimeoutError, APIConnectionError, RateLimitError)) or \
+                (isinstance(e, APIStatusError) and getattr(e, 'status_code', 0) >= 500)
+            # With a fallback configured, auth/not-found on the primary also fail over
+            # (e.g. router rejects the key or renamed the model).
+            failoverable = transient_fail or isinstance(e, (AuthenticationError, PermissionDeniedError, NotFoundError))
+            if failoverable:
+                fb = os.getenv('FAULTSEEKER_LLM_FALLBACK_MODEL', '').strip()
+                if fb and fb != self.model:
+                    # Provider-aware fallback: resolve the fallback's OWN endpoint
+                    # and keys (may be a different provider than the primary).
+                    fb_base, fb_env = UniversalAgent._detect_provider(fb)
+                    if fb_env == 'NARAROUTER_API_KEY':
+                        fb_base = os.getenv('NARAROUTER_BASE_URL', fb_base)
+                    if fb_env == 'GROQ_API_KEY':
+                        fb_base = os.getenv('GROQ_BASE_URL', fb_base)
+                    fb_keys = _parse_api_keys(os.getenv(fb_env, ''))
+                    if not fb_keys:
+                        print(f"   [!] fallback model {fb} has no key ({fb_env}); cannot fail over", flush=True)
+                    else:
+                        print(f"   [!] {self.model} exhausted retries ({type(e).__name__}); failing over to {fb} on its own provider", flush=True)
+                        try:
+                            fb_kwargs = dict(messages=self._truncate_history(self.memory),
+                                             model=fb, temperature=0)
+                            cc = _llm_call_with_retry(
+                                lambda: OpenAI(api_key=fb_keys[0], base_url=fb_base,
+                                               timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
+                                fb_kwargs, fb)
+                            reply = cc.choices[0].message.content or ""
+                            self._append_memory({"role": "assistant", "content": reply})
+                            return reply
+                        except Exception as fb_e:  # noqa: BLE001
+                            print(f"   [!] fallback model {fb} also failed ({type(fb_e).__name__})", flush=True)
+                self.memory.append({"role": "assistant", "content": ''})
+                raise
+            if isinstance(e, (AuthenticationError, PermissionDeniedError, NotFoundError)):
+                self.memory.append({"role": "assistant", "content": ''})
+                raise
             self.memory.append({"role": "assistant", "content": ''})
+            # Demo console visibility: SSE shows stdout, so surface the real
+            # provider error instead of only a generic string.
+            print(f"[!] LLM call failed ({type(e).__name__}): {str(e)[:300]}", flush=True)
             return "An error occurred."
 
 
@@ -349,14 +553,31 @@ class UniversalAgent(AbstractAgent):
         load_dotenv()
         # Auto-detect provider from model prefix
         detected_base_url, env_var = self._detect_provider(model_name)
+        if env_var == 'NARAROUTER_API_KEY':
+            detected_base_url = os.getenv('NARAROUTER_BASE_URL', detected_base_url)
+        if env_var == 'GROQ_API_KEY':
+            detected_base_url = os.getenv('GROQ_BASE_URL', detected_base_url)
+        if env_var == 'OPENAI_API_KEY':
+            detected_base_url = os.getenv('OPENAI_BASE_URL', detected_base_url)
         self.base_url = base_url or detected_base_url
-        self.api_key  = api_key  or os.getenv(env_var, '')
+        # Multiple keys in the env var (newline/comma/space separated, .env-style
+        # tolerated) rotate round-robin per client creation, so provider
+        # per-minute caps add up across keys.
+        raw_keys = api_key or os.getenv(env_var, '')
+        self.api_keys = _parse_api_keys(raw_keys)
+        self.api_key  = self.api_keys[0] if self.api_keys else ''
+        self._key_rr  = 0
         if not self.api_key:
             raise ValueError(
                 f"No API key found for model '{model_name}'. "
                 f"Set the '{env_var}' environment variable in .env"
             )
         super().__init__(task, model_name=model_name)
+
+    def _next_api_key(self):
+        k = self.api_keys[self._key_rr % len(self.api_keys)]
+        self._key_rr += 1
+        return k
 
     @staticmethod
     def _detect_provider(model_name: str):
@@ -366,29 +587,32 @@ class UniversalAgent(AbstractAgent):
         # Default to OpenAI
         return 'https://api.openai.com/v1', 'OPENAI_API_KEY'
 
-    def _truncate_history(self, history, max_turns=2):
+    def _truncate_history(self, history, max_turns=1):
         system_prompt = history[0]
         message_pairs = history[1:]
         truncated = message_pairs[-(max_turns * 2):]
         return [system_prompt] + truncated
 
-    def _send_message(self, user_message: str, temperature: float = 0) -> str:
-        client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+    def _send_message(self, user_message: str, temperature: float = 0, force_json=True) -> str:
         start_time = time.time()
         try:
-            user_message = user_message[:10000]
-            self.memory.append({"role": "user", "content": user_message})
+            if len(user_message) > 10000:
+                user_message = user_message[:8000] + "\n...[middle truncated to fit context window]...\n" + user_message[-2000:]
+            self._append_memory({"role": "user", "content": user_message})
             kwargs = dict(
                 messages=self._truncate_history(self.memory),
                 model=self.model,
                 temperature=temperature,
             )
             # Enable JSON mode if model supports it
-            if self.model in JSON_MODE_MODELS:
+            if force_json and self.model in JSON_MODE_MODELS:
                 kwargs['response_format'] = {"type": "json_object"}
-            chat_completion = client.chat.completions.create(**kwargs)
+            chat_completion = _llm_call_with_retry(
+                lambda: OpenAI(api_key=self._next_api_key(), base_url=self.base_url,
+                               timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
+                kwargs, self.model)
             reply = chat_completion.choices[0].message.content or ""
-            self.memory.append({"role": "assistant", "content": reply})
+            self._append_memory({"role": "assistant", "content": reply})
 
             dur_ms = (time.time() - start_time) * 1000.0
             usage = getattr(chat_completion, 'usage', None)
@@ -398,7 +622,19 @@ class UniversalAgent(AbstractAgent):
 
             return reply
         except Exception as e:
+            # Auth/quota/timeout failures must propagate so the console worker
+            # can rotate to a fallback key; only content-level problems are
+            # swallowed into an empty reply.
+            from openai import (APITimeoutError, APIConnectionError, RateLimitError,
+                                AuthenticationError, PermissionDeniedError, NotFoundError)
+            if isinstance(e, (APITimeoutError, APIConnectionError, RateLimitError,
+                              AuthenticationError, PermissionDeniedError, NotFoundError)):
+                self.memory.append({"role": "assistant", "content": ''})
+                raise
             self.memory.append({"role": "assistant", "content": ''})
+            # Demo console visibility: SSE shows stdout, so surface the real
+            # provider error instead of only a generic string.
+            print(f"[!] LLM call failed ({type(e).__name__}): {str(e)[:300]}", flush=True)
             return "An error occurred."
 
 

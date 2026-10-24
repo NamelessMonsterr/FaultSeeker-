@@ -198,7 +198,7 @@ Return ONLY this JSON (or {{}} if nothing found):
 }}
 
 Rules:
-- functionname and address must exactly match values in the data.
+- The key must be one of the exact functionname_address call ids shown in the data (for example 0xfa461e33_0x0000...). Any other key is discarded as unverifiable.
 - No markdown. No extra text. JSON only.
 
 Current understanding: {0}
