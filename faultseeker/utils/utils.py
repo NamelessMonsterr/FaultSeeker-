@@ -308,9 +308,10 @@ def is_function_hash(function_name):
 
 
 def build_agent(task, model):
-    model = model.strip().lower()
+    """Compatibility entry point using the shared provider-aware factory.
 
-    if model.startswith('gpt'):
-        return GPTAgent(task, model)
-    else:
-        return OllmaAgent(task, model)
+    Keep legacy whitespace/case normalization, but honor registered cloud
+    prefixes rather than silently sending every non-GPT model to local Ollama.
+    """
+    from faultseeker.utils.agent import build_provider_agent
+    return build_provider_agent(task, model.strip().lower())
