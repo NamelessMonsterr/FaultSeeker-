@@ -651,6 +651,20 @@ def _save_probe_cache(chain: str, url: str):
         log.debug(f'[probe cache WRITE FAIL] {e}')
 
 
+def _parity_input_and_callee(node: dict) -> tuple[str, str]:
+    """Creation initcode is input; only result.address identifies its callee."""
+    action = node.get('action') or {}
+    result = node.get('result') or {}
+    action = action if isinstance(action, dict) else {}
+    result = result if isinstance(result, dict) else {}
+    if str(node.get('type') or 'call').upper() in {'CREATE', 'CREATE2'}:
+        input_data, callee = action.get('init'), result.get('address')
+    else:
+        input_data, callee = action.get('input'), action.get('to')
+    return (input_data if isinstance(input_data, str) and input_data else '0x',
+            callee if isinstance(callee, str) else '')
+
+
 def build_parity_tree(trace_list: list) -> dict:
     """
     Reconstruct a nested call tree from Erigon's flat parity trace format.
@@ -674,11 +688,14 @@ def build_parity_tree(trace_list: list) -> dict:
     for item in trace_list:
         addr = tuple(item.get('traceAddress', []))
         action = item.get('action', {})
-        node = {
+        input_data, callee = _parity_input_and_callee(item)
+        # Keep the provider fields so subsequent normalization retains creation
+        # type/result and failure metadata, not just a lossy CALL-shaped tree.
+        node = {**item,
             'call_type': item.get('type', 'call').upper(),
-            'to':        action.get('to', action.get('init', '')),
+            'to':        callee,
             'from':      action.get('from', ''),
-            'input':     action.get('input', '0x'),
+            'input':     input_data,
             'children':  [],
             '_addr':     addr,
         }
@@ -785,12 +802,13 @@ def normalize_trace_node(node: dict, depth: int = 0, call_id: str = '0') -> dict
             normalize_trace_node(child, depth + 1, f'{call_id}.{idx}')
             for idx, child in enumerate(node.get('children', []))
         ]
-        input_data = action.get('input', '0x') or '0x'
-        callee = action.get('to', action.get('init', ''))
+        input_data, callee = _parity_input_and_callee(node)
         caller = action.get('from', '')
+        result = node.get('result') or {}
+        result = result if isinstance(result, dict) else {}
         return_data = (
             node.get('output')
-            or (node.get('result') or {}).get('output')
+            or result.get('output')
             or '0x'
         )
         return {
