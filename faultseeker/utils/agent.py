@@ -402,6 +402,11 @@ class UniversalAgent(AbstractAgent):
             return "An error occurred."
 
 
+def is_cloud_model(model_name: str) -> bool:
+    """Use the live provider registry, including per-run registrations."""
+    return any(model_name.startswith(prefix) for prefix in PROVIDER_CONFIG)
+
+
 def build_provider_agent(task: str, model_name: str) -> AbstractAgent:
     """
     Factory — returns the right agent class for a given model name.
@@ -424,8 +429,7 @@ def build_provider_agent(task: str, model_name: str) -> AbstractAgent:
             "or choose a supported model (gpt-*, gemini-*, grok-*, qwen-*, or a local Ollama model)."
         )
 
-    cloud_prefixes = tuple(PROVIDER_CONFIG.keys())
-    if not any(model_name.startswith(p) for p in cloud_prefixes):
+    if not is_cloud_model(model_name):
         return OllmaAgent(task, model_name)
     openai_prefixes = ('gpt-', 'o1-', 'o3-', 'o4-')
     if any(model_name.startswith(p) for p in openai_prefixes):

@@ -16,14 +16,15 @@ Usage:
 from dataclasses import dataclass
 from faultseeker.prompts.function_analysis.worker_prompts import WorkerPrompts
 from faultseeker.prompts.function_analysis.vulnerability_analysis_prompts import VulnerabilityAnalysisPrompts
+from faultseeker.utils.agent import is_cloud_model
 
-# Cloud model prefixes — anything NOT starting with these is treated as local
+# Historical exported snapshot; runtime classification uses the live registry.
 CLOUD_PREFIXES = ('gpt-', 'o1-', 'o3-', 'o4-', 'grok-', 'qwen-', 'gemini-', 'claude-')
 
 
 def is_local_model(model_name: str) -> bool:
     """Return True if the model is a local Ollama model (not a cloud API)."""
-    return not any(model_name.startswith(p) for p in CLOUD_PREFIXES)
+    return not is_cloud_model(model_name)
 
 
 @dataclass

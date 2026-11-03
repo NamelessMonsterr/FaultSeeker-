@@ -12,7 +12,7 @@ from faultseeker.prompts.function_analysis import (
     VulnerabilityAnalysisPrompts,
     LocalTaskPrompts,
 )
-from faultseeker.prompts.local_model_prompts import get_worker_prompts, get_vuln_prompts
+from faultseeker.prompts.local_model_prompts import get_worker_prompts, get_vuln_prompts, is_local_model
 from faultseeker.utils.utils import build_agent
 from faultseeker.core.llm_router import HybridLLMRouter, build_routed_agent
 from faultseeker.forensics.result import extract_reentrancy_analysis, compute_priority_breakdown
@@ -402,8 +402,7 @@ class FunctionAnalyzer:
         logging.info(f"Task tree: {self.task_tree}")
 
         # Cloud models need fewer iterations than local; 3 passes is plenty.
-        is_cloud = any(self.txn_analyzer_model.startswith(p)
-                       for p in ('gpt-', 'gemini-', 'grok-', 'qwen-', 'claude-', 'o1-', 'o3-', 'o4-'))
+        is_cloud = not is_local_model(self.txn_analyzer_model)
         max_iterations = 3 if is_cloud else 8
         MAX_FUNCTION_SECS = 480   # 8-min hard wall-clock cap per function
 
@@ -707,8 +706,7 @@ class FunctionAnalyzer:
         logging.info(f"Task tree: {self.task_tree}")
 
         import time as _time
-        is_cloud = any(self.txn_analyzer_model.startswith(p)
-                       for p in ('gpt-', 'gemini-', 'grok-', 'qwen-', 'claude-', 'o1-', 'o3-', 'o4-'))
+        is_cloud = not is_local_model(self.txn_analyzer_model)
         txn_iters = 2 if is_cloud else 3
         fn_start = _time.time()
         MAX_FUNCTION_SECS = 480
