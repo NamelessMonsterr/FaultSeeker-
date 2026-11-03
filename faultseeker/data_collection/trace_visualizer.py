@@ -18,14 +18,23 @@ class TraceGraphGenerator:
         return '\n'.join(lines)
     
     def _generate_node(self, lines, node, ancestors, is_last):
-        line = self._format_node_line(node, ancestors, is_last)
-        lines.append(line)
-        
-        if node.type == 'call':
-            children = node.children
-            for i, child in enumerate(children):
-                is_child_last = i == len(children) - 1
-                self._generate_node(lines, child, ancestors + [not is_last], is_child_last)
+        stack = [(node, ancestors, is_last, False)]
+        active = set()
+        while stack:
+            current, current_ancestors, current_last, exiting = stack.pop()
+            if exiting:
+                active.remove(id(current))
+                continue
+            if id(current) in active:
+                raise ValueError('Cyclic trace node')
+            active.add(id(current))
+            stack.append((current, current_ancestors, current_last, True))
+            lines.append(self._format_node_line(current, current_ancestors, current_last))
+            if current.type == 'call':
+                children = list(current.children)
+                for i in range(len(children) - 1, -1, -1):
+                    stack.append((children[i], current_ancestors + [not current_last],
+                                  i == len(children) - 1, False))
     
     def _build_prefix(self, ancestors, is_last):
         prefix = ''
@@ -78,34 +87,39 @@ class TransactionTraceVisualizer:
         self._add_node_to_graph(root_node, parent_id=None, level=0)
     
     def _add_node_to_graph(self, node, parent_id, level):
-        if node.type != 'call' and node.type != 'create':
-            return None
-            
-        node_id = f"node_{self.node_counter}"
-        self.node_counter += 1
-        if node.type == 'create':
-            details = f"new {node.function.replace('new ', '')}@{node.address}"
-            call_type = "create"
-        else:
-            details = f"{node.address}::{node.function}({node.params or ''})"
-            call_type = node.call_type or "call"
-        self.graph.add_node(
-            node_id, 
-            details=details,
-            gas_cost=node.gas,
-            call_type=call_type,
-            level=level,
-            params=node.params,
-            address=node.address,
-            function=node.function,
-            node_type=node.type
-        )
-        if parent_id:
-            self.graph.add_edge(parent_id, node_id, call_type=call_type)
-        for child in node.children:
-            if child.type == 'call' or child.type == 'create':
-                self._add_node_to_graph(child, node_id, level + 1)
-        return node_id
+        root_id = None
+        stack = [(node, parent_id, level, False)]
+        active = set()
+        while stack:
+            current, current_parent, current_level, exiting = stack.pop()
+            if exiting:
+                active.remove(id(current))
+                continue
+            if current.type not in ('call', 'create'):
+                continue
+            if id(current) in active:
+                raise ValueError('Cyclic trace node')
+            active.add(id(current))
+            stack.append((current, current_parent, current_level, True))
+            node_id = f"node_{self.node_counter}"
+            self.node_counter += 1
+            if root_id is None:
+                root_id = node_id
+            if current.type == 'create':
+                details = f"new {current.function.replace('new ', '')}@{current.address}"
+                call_type = 'create'
+            else:
+                details = f"{current.address}::{current.function}({current.params or ''})"
+                call_type = current.call_type or 'call'
+            self.graph.add_node(node_id, details=details, gas_cost=current.gas,
+                                call_type=call_type, level=current_level, params=current.params,
+                                address=current.address, function=current.function, node_type=current.type)
+            if current_parent:
+                self.graph.add_edge(current_parent, node_id, call_type=call_type)
+            for child in reversed(list(current.children)):
+                if child.type in ('call', 'create'):
+                    stack.append((child, node_id, current_level + 1, False))
+        return root_id
     
     def _convert_networkx_graph_to_png(self, graph, output_path, node_size=300, node_color='skyblue', edge_color='black', font_size=10, with_labels=True, layout=nx.spring_layout):
         plt.figure(figsize=(16, 12), dpi=150)

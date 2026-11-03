@@ -768,104 +768,81 @@ def normalize_trace_node(node: dict, depth: int = 0, call_id: str = '0') -> dict
     Returns a dict with canonical fields:
       - call_type: str (always uppercase, e.g. 'CALL', 'DELEGATECALL')
       - to:        str
-      - children:  list[dict] (recursively normalized)
+      - children:  list[dict] (normalized with an explicit traversal stack)
     """
     if not node or not isinstance(node, dict):
         return {}
 
-    # Erigon parity single-node format (action dict present, no calls/children)
-    # subtraces here is an INTEGER count — children come from the flat list
-    # caller should use build_parity_tree() for the full list; this path
-    # handles a single pre-extracted node with already-attached children.
-    if 'action' in node:
-        action   = node.get('action', {})
-        raw_type = node.get('type', 'call')
-        # 'children' may already be attached if this came from build_parity_tree
-        children = [
-            normalize_trace_node(child, depth + 1, f'{call_id}.{idx}')
-            for idx, child in enumerate(node.get('children', []))
-        ]
-        input_data = action.get('input', '0x') or '0x'
-        callee = action.get('to', action.get('init', ''))
-        caller = action.get('from', '')
-        return_data = (
-            node.get('output')
-            or (node.get('result') or {}).get('output')
-            or '0x'
-        )
-        return {
-            'call_id':   call_id,
-            'depth':     depth,
-            'caller':    caller,
-            'callee':    callee,
+    # Each task owns one destination slot. Preallocating children retains their
+    # original order while avoiding Python call-stack growth on deep traces.
+    root = [None]
+    pending = [(node, depth, call_id, root, 0, False)]
+    active = set()
+    while pending:
+        current, current_depth, current_id, destination, position, exiting = pending.pop()
+        if exiting:
+            active.remove(id(current))
+            continue
+        if not current or not isinstance(current, dict):
+            destination[position] = {}
+            continue
+        if id(current) in active:
+            raise ValueError('Cyclic trace cannot be normalized')
+        active.add(id(current))
+
+        if 'action' in current:
+            # Parity subtraces is a count; attached children come from the tree.
+            action = current.get('action', {})
+            raw_type = current.get('type', 'call')
+            raw_children = list(current.get('children', []))
+            input_data = action.get('input', '0x') or '0x'
+            callee = action.get('to', action.get('init', ''))
+            caller = action.get('from', '')
+            value = action.get('value', '0x0')
+            gas = action.get('gas', current.get('gas'))
+            return_data = current.get('output') or (current.get('result') or {}).get('output') or '0x'
+        elif 'children' in current and 'calls' not in current:
+            raw_type = current.get('callType') or current.get('type') or 'call'
+            raw_children = list(current.get('children', []))
+            input_data = current.get('input', '0x') or '0x'
+            callee = current.get('callee') or current.get('to', '')
+            caller = current.get('caller') or current.get('from', '')
+            value = current.get('value', '0x0')
+            gas = current.get('gas')
+            return_data = current.get('output', '0x')
+        else:
+            raw_type = current.get('type') or current.get('callType') or 'CALL'
+            raw_children = list(current.get('calls', []))
+            input_data = current.get('input', '0x') or '0x'
+            callee = current.get('to', '')
+            caller = current.get('from', '')
+            value = current.get('value', '0x0')
+            gas = current.get('gas')
+            return_data = current.get('output', '0x')
+
+        children = [None] * len(raw_children)
+        destination[position] = {
+            'call_id': current_id,
+            'depth': current_depth,
+            'caller': caller,
+            'callee': callee,
             'function_selector': input_data[:10] if len(input_data) >= 10 else '0x',
-            'input':     input_data,
-            'value':     action.get('value', '0x0'),
-            'gas':       action.get('gas', node.get('gas')),
+            'input': input_data,
+            'value': value,
+            'gas': gas,
             'call_type': raw_type.upper(),
-            'success':   _trace_success(node),
+            'success': _trace_success(current),
             'return_data': return_data,
             'storage_writes': [],
-            'children':  children,
-            # Compatibility aliases for legacy downstream code.
-            'to':        callee,
-            'from':      caller,
+            'children': children,
+            'to': callee,
+            'from': caller,
         }
-
-    # Tenderly / children variant (also used by internal TraceNode.to_dict())
-    if 'children' in node and 'calls' not in node:
-        raw_type = (node.get('callType') or node.get('type') or 'call')
-        children = [
-            normalize_trace_node(child, depth + 1, f'{call_id}.{idx}')
-            for idx, child in enumerate(node.get('children', []))
-        ]
-        input_data = node.get('input', '0x') or '0x'
-        callee = node.get('callee') or node.get('to', '')
-        caller = node.get('caller') or node.get('from', '')
-        return {
-            'call_id':   call_id,
-            'depth':     depth,
-            'caller':    caller,
-            'callee':    callee,
-            'function_selector': input_data[:10] if len(input_data) >= 10 else '0x',
-            'input':     input_data,
-            'value':     node.get('value', '0x0'),
-            'gas':       node.get('gas'),
-            'call_type': raw_type.upper(),
-            'success':   _trace_success(node),
-            'return_data': node.get('output', '0x'),
-            'storage_writes': [],
-            'children':  children,
-            'to':        callee,
-            'from':      caller,
-        }
-
-    # Standard geth callTracer (most common)
-    raw_type = (node.get('type') or node.get('callType') or 'CALL')
-    children = [
-        normalize_trace_node(child, depth + 1, f'{call_id}.{idx}')
-        for idx, child in enumerate(node.get('calls', []))
-    ]
-    input_data = node.get('input', '0x') or '0x'
-    callee = node.get('to', '')
-    caller = node.get('from', '')
-    return {
-        'call_id':   call_id,
-        'depth':     depth,
-        'caller':    caller,
-        'callee':    callee,
-        'function_selector': input_data[:10] if len(input_data) >= 10 else '0x',
-        'input':     input_data,
-        'value':     node.get('value', '0x0'),
-        'gas':       node.get('gas'),
-        'call_type': raw_type.upper(),
-        'success':   _trace_success(node),
-        'return_data': node.get('output', '0x'),
-        'storage_writes': [],
-        'children':  children,
-        'to':        callee,
-        'from':      caller,
-    }
+        pending.append((current, current_depth, current_id, destination, position, True))
+        for index in range(len(raw_children) - 1, -1, -1):
+            pending.append((raw_children[index], current_depth + 1,
+                            f'{current_id}.{index}', children, index, False))
+    return root[0]
 
 
 def extract_storage_writes_from_struct_logs(struct_logs: list[dict], root_trace: dict | None = None) -> list[dict]:

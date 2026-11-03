@@ -117,14 +117,31 @@ class TraceAnalyzer:
 
     def _flatten_trace_single(self, trace, depth):
         output = []
+        # Enter frames in preorder; finish sibling-pattern work in the original
+        # postorder, without consuming Python's call stack for EVM frame depth.
+        pending = [(trace, depth, False)]
+        active = set()
+        while pending:
+            current, current_depth, exiting = pending.pop()
+            children = current.get('children', [])
+            if exiting:
+                self._record_repeated_trace_patterns(children)
+                active.remove(id(current))
+                continue
+            if id(current) in active:
+                raise ValueError('Cyclic trace cannot be flattened')
+            active.add(id(current))
+            output.append(self._flatten_trace_frame(current, current_depth))
+            pending.append((current, current_depth, True))
+            pending.extend((child, current_depth + [index], False)
+                           for index, child in reversed(list(enumerate(children))))
+        return output
+
+    def _flatten_trace_frame(self, trace, depth):
         trace['depth'] = depth
-        trace_copy = deepcopy(trace)
-        if 'children' in trace_copy:
-            todo = trace['children']
-            del trace_copy['children']
-        else:
-            todo = []
-        output.append(trace_copy)
+        # Descendants are visited separately and never appear in flat records.
+        # Copying their whole subtrees here was both recursive and quadratic.
+        trace_copy = deepcopy({key: value for key, value in trace.items() if key != 'children'})
         if ('function' in trace_copy) and trace_copy['function']:
             key = trace_copy['address'].lower()
             if key not in self.address_call_memo:
@@ -146,10 +163,9 @@ class TraceAnalyzer:
                 for i in self.txn_seq['created_address']:
                     if i in trace_copy['params'].lower():
                         self.address_calls_with_created_contract_in_params.append(trace_copy)  
-        for index, child in enumerate(todo):
-            child_depth = deepcopy(depth)
-            child_depth.append(index)
-            output.extend(self._flatten_trace_single(child, child_depth))
+        return trace_copy
+
+    def _record_repeated_trace_patterns(self, todo):
         if len(todo) > 3:
             keys = [] 
             keys_function_only = []
@@ -166,21 +182,16 @@ class TraceAnalyzer:
             if repeated_patterns_keys:
                 # todo = self._update_loop_in_trace(todo, repeated_patterns_keys)
                 for repeated_single in repeated_patterns_keys:
-                    pattern = deepcopy(todo[repeated_single['start_index']:repeated_single['start_index']+len(repeated_single['pattern'])])
-                    for p in pattern:
-                        if 'children' in p:
-                            del p['children']
+                    pattern = [deepcopy({key: value for key, value in node.items() if key != 'children'})
+                               for node in todo[repeated_single['start_index']:repeated_single['start_index']+len(repeated_single['pattern'])]]
                     repeated_single['pattern'] = pattern
                 self.repeated_patterns['keys'].extend(repeated_patterns_keys)
             if repeated_patterns_keys_function:
                 for repeated_single in repeated_patterns_keys_function:
-                    pattern = deepcopy(todo[repeated_single['start_index']:repeated_single['start_index']+len(repeated_single['pattern'])])
-                    for p in pattern:
-                        if 'children' in p:
-                            del p['children']
+                    pattern = [deepcopy({key: value for key, value in node.items() if key != 'children'})
+                               for node in todo[repeated_single['start_index']:repeated_single['start_index']+len(repeated_single['pattern'])]]
                     repeated_single['pattern'] = pattern
                 self.repeated_patterns['keys_function_only'].extend(repeated_patterns_keys_function)
-        return output
     
     def _flatten_trace(self):
         output = []
