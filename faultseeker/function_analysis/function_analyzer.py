@@ -530,7 +530,9 @@ class FunctionAnalyzer:
         self.ranked_result = self.agent.query(prompt_text)
 
     def _review_function_calls(self):
-        self.examined_function_memo = []
+        # A selector/name can occur at several unrelated contracts. Only the
+        # same function at the same address is an already examined target.
+        self.examined_function_memo = set()
         selected_functions = {k:v['count'] for k,v in self.functions_to_be_inspected.items()}
         count = 0
         while (len(selected_functions) > 5) and (count < 3):
@@ -586,7 +588,7 @@ class FunctionAnalyzer:
             function_call_related_info = {}
             for f in repeated_pattern['pattern']:
                 if f['function']:
-                    self.examined_function_memo.append(f['function'])
+                    self.examined_function_memo.add((f['function'], f['address'].lower()))
                     related_info = self._retrieve_related_info(f['address'], f['function'])
                     if related_info:
                         current_output = deepcopy(self.trace)
@@ -605,10 +607,14 @@ class FunctionAnalyzer:
             }
         print('functions with created contract in params to be analyzed:', selected_functions_with_created_contract_in_params)
         for function in selected_functions_with_created_contract_in_params:
-            function = function.split('_')[0]
-            if function in self.examined_function_memo:
+            # Ranker keys in this group are function names, not name_address.
+            group = self.address_calls_with_created_contract_in_params.get(function)
+            if group is None:
                 continue
-            self.examined_function_memo.append(function)
+            targets = {(function, address.lower()) for address in group['address']}
+            if targets and targets.issubset(self.examined_function_memo):
+                continue
+            self.examined_function_memo.update(targets)
             if function in self.address_calls_with_created_contract_in_params:
                 current += 1
                 print(f"         [{current}/{total_functions}] Analyzing {function} (created contract param)...")
@@ -656,12 +662,11 @@ class FunctionAnalyzer:
                 self.current_task = ''
                 self.processing_result = ''
                 # self.understanding_result = ''
-                temp = function.split('_')
-                function_name = temp[0]
-                address = temp[1]
-                if function_name in self.examined_function_memo:
+                function_name, address = function.rsplit('_', 1)
+                target = (function_name, address.lower())
+                if target in self.examined_function_memo:
                     continue
-                self.examined_function_memo.append(function_name)
+                self.examined_function_memo.add(target)
                 current += 1
                 print(f"         [{current}/{total_functions}] Analyzing {function_name}...")
                 appearance_count = self.functions_to_be_inspected[function]['count']
