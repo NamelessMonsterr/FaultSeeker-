@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from faultseeker.core.config import FaultSeekerConfig
-from faultseeker.core.confidence_scorer import ConfidenceScorer, generate_evidence_card
+from faultseeker.core.confidence_scorer import ConfidenceScorer, calibrated_confidence, generate_evidence_card
 from faultseeker.core.human_interface import HumanInterface
 from faultseeker.core.llm_router import HybridLLMRouter
 from faultseeker.forensics.result import (
@@ -235,6 +235,7 @@ class FaultSeekerPipeline:
                 try:
                     calibrator = LogisticConfidenceCalibrator.load(calibration_path)
                     print(f"   [OK] Logistic calibrator loaded from {calibration_path}")
+                    calibrated_reports = []
                     for sf in scored_functions:
                         # Build the 8-feature vector expected by the calibrator
                         conf = sf.get('confidence', {})
@@ -251,17 +252,11 @@ class FaultSeekerPipeline:
                             'token_flow_anomaly': float(stage1_signals.get('token_flow_anomaly', 0.0) or 0.0),
                         }
                         calibrated_prob = calibrator.predict_proba(row)
-                        # Update the confidence dict with calibrated score
-                        if isinstance(sf.get('confidence'), dict):
-                            sf['confidence']['overall'] = round(calibrated_prob, 4)
-                            sf['confidence']['calibrated'] = True
-                            sf['confidence']['calibration_model'] = calibration_path
-                        else:
-                            sf['confidence'] = {
-                                'overall': round(calibrated_prob, 4),
-                                'calibrated': True,
-                                'calibration_model': calibration_path,
-                            }
+                        calibrated_reports.append(calibrated_confidence(conf, calibrated_prob, calibration_path))
+                    # Publish only after every function calibrated successfully.
+                    # A later error must not leave a mixed calibrated/heuristic report.
+                    for sf, confidence in zip(scored_functions, calibrated_reports):
+                        sf['confidence'] = confidence
                     # Re-sort by calibrated score
                     scored_functions.sort(key=lambda x: x.get('confidence', {}).get('overall', 0.0), reverse=True)
                     print(f"   [OK] Calibrated {len(scored_functions)} functions (logistic calibrator, paper §5.3)")

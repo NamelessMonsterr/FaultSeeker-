@@ -14,6 +14,8 @@ Factors:
 """
 
 import logging
+import copy
+import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
 
@@ -363,6 +365,32 @@ class ConfidenceScorer:
             explanation.append(f"  {name}: {value:.1%} ({strength})")
 
         return explanation
+
+
+def calibrated_confidence(confidence: Any, probability: float, model_path: str) -> Dict[str, Any]:
+    """Report calibration coherently while preserving the original heuristic.
+
+    Component scores are heuristic inputs, not calibrated feature attributions.
+    The original score, level and explanation remain available without being
+    presented as the explanation of the calibrated probability.
+    """
+    if isinstance(probability, bool):
+        raise ValueError("Calibration must return a finite probability between zero and one")
+    probability = float(probability)
+    if not math.isfinite(probability) or not 0.0 <= probability <= 1.0:
+        raise ValueError("Calibration must return a finite probability between zero and one")
+    probability = round(probability, 4)
+    level = next(level for threshold, level, _ in CONFIDENCE_LEVELS if probability >= threshold)
+    original = copy.deepcopy(confidence) if isinstance(confidence, dict) else None
+    result = copy.deepcopy(original) if original is not None else {}
+    result.update(overall=probability, level=level, calibrated=True,
+                  calibration_model=model_path, heuristic_confidence=original,
+                  explanation=[
+                      f"Calibrated confidence: {probability:.1%} ({level}).",
+                      "Component scores are heuristic inputs, not calibrated feature contributions. "
+                      "The original heuristic explanation is retained in heuristic_confidence.",
+                  ])
+    return result
 
 
 def generate_evidence_card(
