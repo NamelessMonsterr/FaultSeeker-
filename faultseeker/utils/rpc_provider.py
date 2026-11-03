@@ -428,7 +428,10 @@ class _ServerError(Exception):
 
 def _http_post(url: str, body: bytes, timeout: int = 5) -> Any:
     """Raw HTTP POST. Raises typed errors for 429, 5xx, 401/403."""
-    req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+    req = urllib.request.Request(url, data=body, headers={
+        'Content-Type': 'application/json',
+        'User-Agent': 'FaultSeeker',
+    })
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read())
