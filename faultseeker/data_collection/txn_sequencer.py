@@ -23,20 +23,34 @@ class TransactionSequencer:
         if not node:
             return {}
 
-        return {
-            'type': 'call',
-            'gas': node.get('gas'),
-            'address': node.get('callee'),
-            'function': node.get('function_selector'),
-            'params': node.get('input', '0x')[10:] if node.get('input') else '',
-            'call_type': (node.get('call_type') or '').lower() or None,
-            'value': node.get('value'),
-            'contract_type': None,
-            'children': [
-                TransactionSequencer._canonical_to_legacy_trace(child)
-                for child in node.get('children', [])
-            ],
-        }
+        def fields(source):
+            if not source:
+                return {}
+            return {
+                'type': 'call', 'gas': source.get('gas'), 'address': source.get('callee'),
+                'function': source.get('function_selector'),
+                'params': source.get('input', '0x')[10:] if source.get('input') else '',
+                'call_type': (source.get('call_type') or '').lower() or None,
+                'value': source.get('value'), 'contract_type': None, 'children': [],
+            }
+        result = fields(node)
+        stack = [(node, result, False)]
+        active = set()
+        while stack:
+            source, target, exiting = stack.pop()
+            if exiting:
+                active.remove(id(source))
+                continue
+            if not source:
+                continue
+            if id(source) in active:
+                raise ValueError('Cyclic canonical trace')
+            active.add(id(source))
+            stack.append((source, target, True))
+            children = [(child, fields(child), False) for child in source.get('children', [])]
+            target['children'] = [child_target for _, child_target, _ in children]
+            stack.extend(reversed(children))
+        return result
     
     def generate_text_representation(self, root_node):
         return self.generator.generate(root_node)

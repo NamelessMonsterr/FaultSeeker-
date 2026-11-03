@@ -17,33 +17,54 @@ class TraceNode:
     
     def to_dict(self):
         """Convert node to dictionary representation."""
-        return {
-            'type': self.type,
-            'gas': self.gas,
-            'address': self.address,
-            'function': self.function,
-            'params': self.params,
-            'call_type': self.call_type,
-            'value': self.value,
-            'contract_type': self.contract_type,
-            'children': [child.to_dict() for child in self.children]
-        }
+        def fields(node):
+            return {
+                'type': node.type, 'gas': node.gas, 'address': node.address,
+                'function': node.function, 'params': node.params,
+                'call_type': node.call_type, 'value': node.value,
+                'contract_type': node.contract_type, 'children': [],
+            }
+        result = fields(self)
+        stack = [(self, result, False)]
+        active = set()
+        while stack:
+            source, target, exiting = stack.pop()
+            if exiting:
+                active.remove(id(source))
+                continue
+            if id(source) in active:
+                raise ValueError('Cyclic trace node')
+            active.add(id(source))
+            stack.append((source, target, True))
+            children = [(child, fields(child), False) for child in source.children]
+            target['children'] = [child_target for _, child_target, _ in children]
+            stack.extend(reversed(children))
+        return result
     
     @classmethod
     def from_dict(cls, data):
         """Create a TraceNode from a dictionary."""
-        node = cls(
-            type=data['type'],
-            gas=data.get('gas'),
-            address=data.get('address'),
-            function=data.get('function'),
-            params=data.get('params'),
-            call_type=data.get('call_type'),
-            value=data.get('value'),
-            contract_type=data.get('contract_type')
-        )
-        node.children = [cls.from_dict(child) for child in data.get('children', [])]
-        return node
+        def make(source):
+            return cls(type=source['type'], gas=source.get('gas'),
+                       address=source.get('address'), function=source.get('function'),
+                       params=source.get('params'), call_type=source.get('call_type'),
+                       value=source.get('value'), contract_type=source.get('contract_type'))
+        result = make(data)
+        stack = [(data, result, False)]
+        active = set()
+        while stack:
+            source, target, exiting = stack.pop()
+            if exiting:
+                active.remove(id(source))
+                continue
+            if id(source) in active:
+                raise ValueError('Cyclic trace dictionary')
+            active.add(id(source))
+            stack.append((source, target, True))
+            children = [(child, make(child), False) for child in source.get('children', [])]
+            target.children = [child_target for _, child_target, _ in children]
+            stack.extend(reversed(children))
+        return result
 
 class TraceParser:    
     def __init__(self):

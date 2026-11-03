@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import sys
 from datetime import datetime
 
 from faultseeker.core.auto_model_selector import (
@@ -43,6 +44,14 @@ def main(
     local_model: str = None,
     human_in_loop: bool = False,
 ):
+    # Standard JSON codecs and deepcopy still recurse through nested dict/list
+    # containers, even though trace-specific traversal is iterative. Establish
+    # application capacity before retrieval/cache/report processing, rather than
+    # relying on the historical function-analyzer import side effect. This is
+    # process-wide and is never temporarily reset while worker threads run.
+    # The supported 1,024-frame boundary is tested; arbitrary depth is not.
+    if sys.getrecursionlimit() < 20000:
+        sys.setrecursionlimit(20000)
     banner()
     print("\nTransaction Information:")
     if txn_link:
