@@ -90,6 +90,65 @@ class ContractDownloader:
         logging.info(f'Downloaded {address}[{chain}] -> {out_file}')
 
     @staticmethod
+    def get_source_bundle(chain: str, address: str) -> dict | None:
+        """Fetch verified source + ABI for one address in a single explorer call.
+
+        Returns {'contract_name', 'abi', 'proxy', 'sources': {path: content}}
+        or None when retrieval fails. A failed call never looks like an empty
+        success: None is returned and the primary error is logged.
+        """
+        data = explorer_call(chain, {
+            'module': 'contract',
+            'action': 'getsourcecode',
+            'address': address,
+        })
+        if not data or data.get('status') != '1' or not data.get('result'):
+            logging.warning(
+                f'No source bundle for {address}[{chain}]: '
+                f'{data.get("message") if data else "all endpoints failed"} '
+                f'{data.get("result") if data else ""}'.strip())
+            return None
+        result = data['result'][0]
+        source_code = result.get('SourceCode', '') or ''
+        if not source_code.strip():
+            logging.warning(f'Empty source for {address}[{chain}] (unverified?)')
+            return None
+
+        abi = None
+        raw_abi = result.get('ABI')
+        if isinstance(raw_abi, str) and raw_abi and raw_abi != 'Contract source code not verified':
+            try:
+                abi = json.loads(raw_abi)
+            except Exception:
+                abi = None
+
+        sources = {}
+        contract_name = result.get('ContractName', '') or ''
+        if source_code.startswith('{{'):
+            # Etherscan multi-file standard-json (double-braced)
+            try:
+                inner = json.loads(source_code[1:-1])
+                for path, content in (inner.get('sources', {}) or {}).items():
+                    sources[path] = (content or {}).get('content', '')
+            except Exception:
+                logging.warning(f'Malformed multi-file source for {address}[{chain}]')
+                return None
+        else:
+            fname = result.get('FileName') or f'{contract_name or "Contract"}.sol'
+            sources[fname] = source_code
+            for extra in (result.get('AdditionalSources') or []):
+                if isinstance(extra, dict) and extra.get('SourceCode'):
+                    sources[extra.get('Filename') or f'extra_{len(sources)}.sol'] = extra['SourceCode']
+
+        proxy = str(result.get('Proxy', '0')) == '1' or bool(result.get('Implementation'))
+        return {
+            'contract_name': contract_name,
+            'abi': abi,
+            'proxy': proxy,
+            'sources': sources,
+        }
+
+    @staticmethod
     def get_abi(chain: str, address: str) -> list | None:
         """Fetch ABI for a verified contract. Returns parsed list or None."""
         data = explorer_call(chain, {
