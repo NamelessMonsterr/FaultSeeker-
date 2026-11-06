@@ -522,3 +522,59 @@ def test_import_alias_qualified_struct_binds_direct():
     res = bind_function(_bundle('Target', abi), parsed, sel, lines)
     assert res['status'] == 'direct_verified'
     assert 'return 2' in res['bodies'][0]['content']
+
+
+F_UINT_ABI = [{'type': 'function', 'name': 'f',
+               'inputs': [{'name': 'x', 'type': 'uint256'}], 'outputs': []}]
+
+
+def test_import_aliased_base_uses_import_identity_not_global_name():
+    """Reviewer case: import {Base as B}; contract Target is B {}. The alias B
+    must resolve through the import to Base.sol::Base - never to the unrelated
+    global Other.sol::B - even with NO direct body on Target."""
+    src = {
+        'Base.sol': ("pragma solidity ^0.8.0;\n"
+                     "contract Base { function f(uint256 x) public returns (uint256) { return 1; } }\n"),
+        'Other.sol': ("pragma solidity ^0.8.0;\n"
+                      "contract B { function f(uint256 x) public returns (uint256) { return 999; } }\n"),
+        'Target.sol': ("pragma solidity ^0.8.0;\nimport {Base as B} from './Base.sol';\n"
+                       "contract Target is B {}\n"),
+    }
+    parsed, lines = _parsed(src)
+    sel = function_selector('f', F_UINT_ABI[0]['inputs'])
+    res = bind_function(_bundle('Target', F_UINT_ABI), parsed, sel, lines)
+    assert res['status'] == 'inherited_verified'
+    assert res['bodies'][0]['contract'] == 'Base'
+    assert 'return 1' in res['bodies'][0]['content']
+
+
+def test_import_alias_missing_file_fails_closed():
+    """Aliased base whose imported file is not in the bundle: unsupported
+    ancestry must fail closed, never fall back to a same-named global."""
+    src = {
+        'Other.sol': ("pragma solidity ^0.8.0;\n"
+                      "contract B { function f(uint256 x) public returns (uint256) { return 999; } }\n"),
+        'Target.sol': ("pragma solidity ^0.8.0;\nimport {Base as B} from './Missing.sol';\n"
+                       "contract Target is B {}\n"),
+    }
+    parsed, lines = _parsed(src)
+    sel = function_selector('f', F_UINT_ABI[0]['inputs'])
+    res = bind_function(_bundle('Target', F_UINT_ABI), parsed, sel, lines)
+    assert res['status'] == 'unresolved'
+    assert res['reason'].startswith('unsupported_ancestry')
+
+
+def test_qualified_base_without_import_alias_fails_closed():
+    """contract Target is Lib.Base {} with no `import * as Lib` in scope:
+    qualifier stripping could bind an unrelated Base, so fail closed."""
+    src = {
+        'Base.sol': ("pragma solidity ^0.8.0;\n"
+                     "contract Base { function f(uint256 x) public returns (uint256) { return 1; } }\n"),
+        'Target.sol': ("pragma solidity ^0.8.0;\n"
+                       "contract Target is Lib.Base {}\n"),
+    }
+    parsed, lines = _parsed(src)
+    sel = function_selector('f', F_UINT_ABI[0]['inputs'])
+    res = bind_function(_bundle('Target', F_UINT_ABI), parsed, sel, lines)
+    assert res['status'] == 'unresolved'
+    assert res['reason'].startswith('unsupported_ancestry')
