@@ -378,12 +378,18 @@ class UnsupportedAncestry(Exception):
 
 def _resolve_import_path(imp: str, from_path: str, parsed):
     """Resolve an import path to a key of parsed['sources_paths'].
-    Returns the matching source-unit path or None when it is not in the
-    bundle (never guesses by basename)."""
-    candidates = [posixpath.normpath(posixpath.join(posixpath.dirname(from_path), imp)), imp]
-    for cand in candidates:
+    Per Solidity path resolution, relative joining against the importing
+    file's directory applies ONLY to explicit ./ or ../ paths. Any other
+    (direct) import must match a source-unit key exactly; when it does not,
+    return None (fail closed) - never a relative-joined guess, which could
+    bind an unrelated same-path file elsewhere in the tree."""
+    if imp.startswith('./') or imp.startswith('../'):
+        cand = posixpath.normpath(posixpath.join(posixpath.dirname(from_path), imp))
         if cand in parsed['sources_paths']:
             return cand
+        return None
+    if imp in parsed['sources_paths']:
+        return imp
     return None
 
 
