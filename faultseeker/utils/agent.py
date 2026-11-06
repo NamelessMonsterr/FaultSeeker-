@@ -1,0 +1,683 @@
+import abc
+import json
+import logging
+import re
+import time
+from typing import Dict, List, Any, Union, Optional
+import traceback
+import threading
+from ollama import chat
+from openai import OpenAI
+import os
+from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
+
+# ── Local model tuning constants ──────────────────────────────────────────────
+LOCAL_MODEL_TIMEOUT_SECS = int(os.getenv('FAULTSEEKER_LOCAL_MODEL_TIMEOUT_SECS', '600'))  # per Ollama call; 2s was guaranteed-failure for any real local inference
+LOCAL_MODEL_NUM_CTX      = 4096    # Explicit context window for Ollama
+LOCAL_MODEL_MAX_PROMPT   = 6000    # Truncate prompts longer than this (chars)
+LOCAL_MODEL_MAX_TURNS    = 2       # History turns to keep for local models
+LOCAL_MODEL_JSON_RETRIES = 5       # More retries since small models are flaky
+
+
+# ── Provider registry ──────────────────────────────────────────────────
+# Maps model-name prefix → (base_url, env_var_for_api_key)
+PROVIDER_CONFIG = {
+    # OpenAI
+    'gpt-':     ('https://api.openai.com/v1',                                    'OPENAI_API_KEY'),
+    'o1-':      ('https://api.openai.com/v1',                                    'OPENAI_API_KEY'),
+    'o3-':      ('https://api.openai.com/v1',                                    'OPENAI_API_KEY'),
+    'o4-':      ('https://api.openai.com/v1',                                    'OPENAI_API_KEY'),
+    # xAI Grok (OpenAI-compatible)
+    'grok-':    ('https://api.x.ai/v1',                                          'XAI_API_KEY'),
+    # Inception Labs Mercury (OpenAI-compatible, reasoning-style models)
+    'mercury-': ('https://api.inceptionlabs.ai/v1',                              'MERCURY_API_KEY'),
+    # Alibaba Qwen via DashScope (OpenAI-compatible)
+    'qwen-':    ('https://dashscope.aliyuncs.com/compatible-mode/v1',            'DASHSCOPE_API_KEY'),
+    # Google Gemini (OpenAI-compatible endpoint)
+    'gemini-':  ('https://generativelanguage.googleapis.com/v1beta/openai/',     'GOOGLE_API_KEY'),
+    # NaraRouter / bynara (OpenAI-compatible free router, 7M tokens/day)
+    'agnes':    ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'jev':      ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'laguna':   ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'nemotron': ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    'minimax':  ('https://router.bynara.id/v1',                                'NARAROUTER_API_KEY'),
+    # GroqCloud (OpenAI-compatible, free dev tier)
+    'llama-':   ('https://api.groq.com/openai/v1',                             'GROQ_API_KEY'),
+    'qwen/':    ('https://api.groq.com/openai/v1',                             'GROQ_API_KEY'),
+    'openai/gpt-oss': ('https://api.groq.com/openai/v1',                       'GROQ_API_KEY'),
+    'allam-':   ('https://api.groq.com/openai/v1',                             'GROQ_API_KEY'),
+    # NVIDIA NIM (OpenAI-compatible; free tier ~40 RPM, dashed live model ids)
+    'z-ai/':        ('https://integrate.api.nvidia.com/v1',                          'NVIDIA_API_KEY'),
+    'deepseek-ai/': ('https://integrate.api.nvidia.com/v1',                          'NVIDIA_API_KEY'),
+    'nvidia/':      ('https://integrate.api.nvidia.com/v1',                          'NVIDIA_API_KEY'),
+    # Anthropic Claude (NB: not OpenAI-compatible natively — requires anthropic sdk)
+    'claude-':  ('https://api.anthropic.com/v1',                                 'ANTHROPIC_API_KEY'),
+}
+
+# Models that support native JSON response_format
+JSON_MODE_MODELS = {
+    'gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano',
+    'gpt-4-turbo',
+    'grok-3', 'grok-3-mini', 'grok-2',
+    'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash',
+    'qwen-plus', 'qwen-turbo', 'qwen-max',
+}
+
+
+def _parse_api_keys(raw):
+    """Tolerant multi-key parse: newline/comma/space separated, .env-style
+    VAR= prefixes tolerated (only *_API_KEY* assignments count)."""
+    out = []
+    for tok in re.split(r"[\s,;]+", (raw or '').strip()):
+        tok = tok.strip().strip('"').strip("'")
+        if not tok:
+            continue
+        if '=' in tok:
+            name, _, tok = tok.partition('=')
+            if 'API_KEY' not in name:
+                continue
+        tok = tok.strip()
+        if tok:
+            out.append(tok)
+    return out
+
+
+# ── Bounded LLM calls (console demo hardening) ────────────────────────────────
+# Without an explicit client timeout the OpenAI SDK waits ~600s per attempt and
+# retries internally, so one slow provider wedged a whole analysis run. These
+# knobs bound every call; auth/quota failures are re-raised so the console's
+# per-key rotation can engage instead of silently producing empty output.
+LLM_CALL_TIMEOUT_SECS = int(os.getenv('FAULTSEEKER_LLM_TIMEOUT_SECS', '120'))
+LLM_CALL_RETRIES = int(os.getenv('FAULTSEEKER_LLM_RETRIES', '6'))
+# NaraRouter-class routers flap ~30% of calls (429/5xx/slow); give them room.
+LLM_RETRY_BACKOFF_LADDER = [5, 15, 45, 90]
+
+
+def _llm_call_with_retry(create_client, kwargs, model):
+    """One chat.completions.create with bounded timeout + limited retries.
+
+    Raises on auth/quota/not-found (caller rotates keys or fails fast) and on
+    exhausted transient failures; returns the completion on success.
+    """
+    import random
+    from openai import (APITimeoutError, APIConnectionError, RateLimitError,
+                        AuthenticationError, PermissionDeniedError, NotFoundError,
+                        BadRequestError, APIStatusError)
+    transient = (APITimeoutError, APIConnectionError, RateLimitError)
+    attempt = 0
+    while True:
+        client = create_client()
+        try:
+            return client.chat.completions.create(**kwargs)
+        except (AuthenticationError, PermissionDeniedError, NotFoundError):
+            raise                      # key/model problem: rotation-worthy
+        except BadRequestError as e:
+            msg = str(e).lower()
+            if 'api key' in msg or 'incorrect api key' in msg or 'invalid api key' in msg:
+                import httpx as _httpx
+                raise AuthenticationError(str(e), response=_httpx.Response(401, request=_httpx.Request('POST', 'https://auth.invalid')), body=None)
+            raise                      # genuine request problem: do not retry
+        except transient as e:
+            # NB: RateLimitError subclasses APIStatusError, so this clause MUST
+            # come before `except APIStatusError` or 429s re-raise instantly
+            # with zero retries (the hollow-run bug).
+            attempt += 1
+            if attempt > LLM_CALL_RETRIES:
+                raise                  # let the caller rotate keys / fail loudly
+            backoff = LLM_RETRY_BACKOFF_LADDER[min(attempt - 1, len(LLM_RETRY_BACKOFF_LADDER) - 1)] + random.uniform(0, 3)
+            # Honor provider hints ("try again in 12.3s") when they exceed the ladder.
+            _m = re.search(r'try again in ([0-9.]+)s', str(e), re.I)
+            if _m:
+                backoff = min(max(backoff, float(_m.group(1)) + 3), 120)  # cap provider hints: an unbounded hint could sleep a worker for hours
+            print(f"   [!] LLM call to {model} failed ({type(e).__name__}, attempt {attempt}); retrying in {int(backoff)}s...", flush=True)
+            time.sleep(backoff)
+        except APIStatusError as e:
+            # Router-side 5xx flaps are transient; other status errors are not.
+            if getattr(e, 'status_code', 0) < 500:
+                raise
+            attempt += 1
+            if attempt > LLM_CALL_RETRIES:
+                raise
+            backoff = LLM_RETRY_BACKOFF_LADDER[min(attempt - 1, len(LLM_RETRY_BACKOFF_LADDER) - 1)] + random.uniform(0, 3)
+            print(f"   [!] LLM call to {model} failed ({type(e).__name__} {getattr(e, 'status_code', '')}, attempt {attempt}); retrying in {int(backoff)}s...", flush=True)
+            time.sleep(backoff)
+
+
+
+JSON_RETRY_PROMPT = (
+    "Your previous response was not valid JSON. "
+    "Return ONLY a valid JSON object or array. "
+    "No explanations, no markdown fences, no extra text."
+)
+
+
+class AbstractAgent(abc.ABC):
+
+    def __init__(
+        self,
+        task: str,
+        model_name: str,
+    ):
+        self.model = model_name
+        self.memory = []
+        self._memory_max_pairs = int(os.getenv('FAULTSEEKER_MEMORY_MAX_PAIRS', '20'))
+        self._init_resources(task)
+
+    def _append_memory(self, message):
+        # Stored memory is capped (system prompt + last N pairs); only the copy
+        # SENT to the provider was truncated before, so long runs retained every
+        # prompt and reply forever -> slow memory growth on 512MB workers.
+        self.memory.append(message)
+        keep = self._memory_max_pairs * 2
+        if len(self.memory) > 1 + keep:
+            self.memory = [self.memory[0]] + self.memory[-keep:]
+
+    def _init_resources(self, task):
+        system_message = {
+            "role": "system",
+            "content": '\n'.join([task])
+        }
+        self.memory.append(system_message)
+
+    # to be implemented in the child class
+    def _send_message(self, user_message: str, temperature=0) -> str:
+        pass
+
+    def _record_router_query(
+        self,
+        prompt_len: int,
+        resp_len: int,
+        duration_ms: float,
+        input_tokens: Optional[int] = None,
+        output_tokens: Optional[int] = None,
+    ):
+        router = getattr(self, 'router', None)
+        if router and hasattr(router, 'record_query'):
+            agent_role = getattr(self, 'agent_role', '')
+            tier = router.get_tier(agent_role=agent_role) if hasattr(router, 'get_tier') else 2
+            router.record_query(
+                model=self.model,
+                tier=tier,
+                prompt_length=prompt_len,
+                response_length=resp_len,
+                duration_ms=duration_ms,
+                agent_role=agent_role,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
+
+    # ── Robust JSON parser (Fix 1) ─────────────────────────────────────
+    def _extract_json(self, text: str):
+        """
+        Try to extract a JSON object/array from raw LLM text using
+        multiple strategies in order of preference:
+          1. json.loads on the stripped text
+          2. Extract from ```json ... ``` fence
+          3. Extract from ``` ... ``` fence
+          4. Regex extraction of first {...} or [...]
+          5. eval() fallback (last resort)
+        """
+        # Reasoning models (NIM/DeepSeek-class) wrap chain-of-thought in
+        # <think>...</think>; those braces break every strategy below.
+        text = re.sub(r'<think>[\s\S]*?</think>', '', text)
+        # Strategy 1 — clean and direct parse
+        cleaned = text.strip().strip('`').strip()
+        try:
+            return json.loads(cleaned)
+        except Exception:
+            pass
+
+        # Strategy 2 — ```json fence
+        fence_json = re.search(r'```json\s*([\s\S]*?)```', text)
+        if fence_json:
+            try:
+                return json.loads(fence_json.group(1).strip())
+            except Exception:
+                pass
+
+        # Strategy 3 — generic ``` fence
+        fence_generic = re.search(r'```\s*([\s\S]*?)```', text)
+        if fence_generic:
+            try:
+                return json.loads(fence_generic.group(1).strip())
+            except Exception:
+                pass
+
+        # Strategy 4 — balanced extraction of the FIRST complete {...} or [...].
+        # (The old greedy regex spanned the first '{' to the LAST '}', producing
+        # an invalid span on prose with braces or multiple JSON objects.)
+        def _balanced(t, open_ch, close_ch):
+            start = t.find(open_ch)
+            if start == -1:
+                return None
+            depth = 0
+            in_str = False
+            esc = False
+            quote = ''
+            for i in range(start, len(t)):
+                ch = t[i]
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif ch == '\\':
+                        esc = True
+                    elif ch == quote:
+                        in_str = False
+                    continue
+                if ch in ('"', "'"):
+                    in_str = True
+                    quote = ch
+                elif ch == open_ch:
+                    depth += 1
+                elif ch == close_ch:
+                    depth -= 1
+                    if depth == 0:
+                        return t[start:i+1]
+            return None
+        _obj_at = text.find('{')
+        _arr_at = text.find('[')
+        if _arr_at != -1 and (_obj_at == -1 or _arr_at < _obj_at):
+            _pairs = (('[', ']'), ('{', '}'))
+        else:
+            _pairs = (('{', '}'), ('[', ']'))
+        for _pair in _pairs:
+            _span = _balanced(text, *_pair)
+            if _span:
+                try:
+                    return json.loads(_span)
+                except Exception:
+                    pass
+
+        # Strategy 5 — all structural parsing failed; do NOT eval() LLM output
+        # (eval on untrusted text is a critical security vulnerability)
+        logger.warning("_extract_json: all JSON strategies failed; returning raw text for retry")
+        raise ValueError("Invalid JSON from LLM — cannot parse response")
+
+    def _process_json_response(self, response: str) -> Dict[str, Any]:
+        try:
+            return self._extract_json(response)
+        except ValueError:
+            return {}
+
+    def _process_dict_response(self, response: str) -> Dict[str, Any]:
+        try:
+            result = self._extract_json(response)
+        except ValueError:
+            return [response]
+        if isinstance(result, (dict, list)):
+            return result
+        return [response]
+
+    def _process_response(self, response: str, format: str) -> Union[List[str], Dict[str, Any]]:
+        if format == 'json':
+            return self._process_json_response(response)
+        elif format == 'dict':
+            return self._process_dict_response(response)
+        return response
+
+    def _query_with_json_retry(self, user_message: str, temperature: float, max_retries: int = 3) -> Any:
+        """
+        Query the LLM and retry up to max_retries times if the output
+        is not valid JSON. On each retry, inject a correction prompt.
+        """
+        _budget = int(os.getenv('FAULTSEEKER_MAX_QUERY_SECS', '900'))
+        _t0 = time.time()
+        result_raw = self._send_message(user_message, temperature)
+        print(f"   [dbg] LLM raw reply ({self.model}): {str(result_raw)[:300]!r}", flush=True)
+        retries = 0
+        while retries <= max_retries:
+            if time.time() - _t0 > _budget:
+                print(f"[!] LLM query exceeded FAULTSEEKER_MAX_QUERY_SECS={_budget}s wall-clock budget; returning empty", flush=True)
+                return {}
+            try:
+                return self._extract_json(result_raw)
+            except ValueError:
+                retries += 1
+                if retries > max_retries:
+                    logger.warning("JSON parsing failed after %d retries; returning empty dict", max_retries)
+                    print(f"[!] LLM response was not valid JSON after {max_retries} retries; last reply: {str(result_raw)[:200]!r}", flush=True)
+                    return {}
+                logger.debug("JSON retry %d/%d", retries, max_retries)
+                result_raw = self._send_message(
+                    JSON_RETRY_PROMPT + "\n\nOriginal request - respond to THIS with valid JSON only:\n" + user_message[:4000],
+                    0.0)  # Force temp=0 on retries; re-include the request because history truncation drops it
+
+    def query(self, user_message: str, temperature=0, format='json') -> Any:
+        if format == 'str':
+            return self._send_message(user_message, temperature, force_json=False)
+
+        # Use retry-enabled query for JSON formats
+        try:
+            return self._query_with_json_retry(user_message, temperature)
+        except Exception as e:
+            logger.error("query() failed completely: %s", e)
+            print(f"[!] LLM query failed ({type(e).__name__}): {str(e)[:300]}", flush=True)
+            return {}
+
+
+class OllmaAgent(AbstractAgent):
+    def __init__(self, task, model_name: str = "deepseek-r1:14b"):
+        super().__init__(task, model_name)
+
+    def _truncate_history(self, history, max_turns=LOCAL_MODEL_MAX_TURNS):
+        """Keep only the system prompt + last max_turns pairs to stay within context."""
+        system_prompt = history[0]
+        message_pairs = history[1:]
+        truncated = message_pairs[-(max_turns * 2):]
+        return [system_prompt] + truncated
+
+    def _send_message(self, user_message: str, temperature=0.0, force_json=True) -> str:
+        # Cap prompt length so local model context window isn't blown out
+        start_time = time.time()
+        _prev = getattr(self, '_inflight_thread', None)
+        if _prev is not None and _prev.is_alive():
+            print(f"   [!] Local model '{self.model}' still busy with a previous call; failing fast instead of stacking leaked inference threads.", flush=True)
+            return ''
+        if len(user_message) > LOCAL_MODEL_MAX_PROMPT:
+            logger.warning(
+                "Prompt truncated: original length %d chars exceeds LOCAL_MODEL_MAX_PROMPT=%d",
+                len(user_message), LOCAL_MODEL_MAX_PROMPT,
+            )
+            user_message = user_message[:LOCAL_MODEL_MAX_PROMPT-2000] + "\n...[middle truncated for local model]...\n" + user_message[-2000:]
+
+        self._append_memory({"role": "user", "content": user_message})
+        result_container = [None]
+        error_container  = [None]
+        raw_response_container = [None]
+
+        def _call():
+            try:
+                response = chat(
+                    model=self.model,
+                    messages=self._truncate_history(self.memory),
+                    options={
+                        'temperature': temperature,
+                        'num_ctx': LOCAL_MODEL_NUM_CTX,
+                    }
+                )
+                raw_response_container[0] = response
+                result_container[0] = response['message']['content']
+            except Exception as e:
+                error_container[0] = e
+
+        t = threading.Thread(target=_call, daemon=True)
+        t.start()
+        self._inflight_thread = t
+        t.join(timeout=LOCAL_MODEL_TIMEOUT_SECS)
+
+        dur_ms = (time.time() - start_time) * 1000.0
+
+        if t.is_alive():
+            print(f"\n   [!] Local model '{self.model}' timed out after {LOCAL_MODEL_TIMEOUT_SECS}s. Returning empty.")
+            self._append_memory({"role": "assistant", "content": ""})
+            self._record_router_query(len(user_message), 0, dur_ms)
+            return ""
+
+        if error_container[0]:
+            err = error_container[0]
+            print(f"   [!] Local model '{self.model}' error: {type(err).__name__}: {err}")
+            self._append_memory({"role": "assistant", "content": ""})
+            self._record_router_query(len(user_message), 0, dur_ms)
+            return ""
+
+        assistant_response = result_container[0] or ""
+        self._append_memory({"role": "assistant", "content": assistant_response})
+
+        raw_resp = raw_response_container[0]
+        inp_tok = raw_resp.get('prompt_eval_count') if isinstance(raw_resp, dict) else None
+        out_tok = raw_resp.get('eval_count') if isinstance(raw_resp, dict) else None
+        self._record_router_query(len(user_message), len(assistant_response), dur_ms, input_tokens=inp_tok, output_tokens=out_tok)
+
+        return assistant_response
+
+    def query(self, user_message: str, temperature=0.0, format='json') -> Any:
+        """Override with local-model tuned settings: lower temp, more retries."""
+        if format == 'str':
+            return self._send_message(user_message, temperature, force_json=False)
+        try:
+            return self._query_with_json_retry(
+                user_message, temperature=0.0,
+                max_retries=LOCAL_MODEL_JSON_RETRIES
+            )
+        except Exception as e:
+            raw = self._send_message(user_message, 0.0)
+            return self._process_response(raw, format)
+
+
+class GPTAgent(AbstractAgent):
+    """OpenAI GPT agent (gpt-4o, gpt-4.1, o1, o3 etc.)"""
+
+    def __init__(self, task, model_name):
+        load_dotenv()
+        self.openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not self.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is not set - GPTAgent cannot run without it (multi-key lists are only supported by UniversalAgent)")
+        super().__init__(task, model_name=model_name)
+
+    def _truncate_history(self, history, max_turns=1):
+        system_prompt = history[0]
+        message_pairs = history[1:]
+        truncated = message_pairs[-(max_turns * 2):]
+        return [system_prompt] + truncated
+
+    def _send_message(self, user_message, temperature=0, force_json=True):
+        start_time = time.time()
+        try:
+            if len(user_message) > 10000:
+                user_message = user_message[:8000] + "\n...[middle truncated to fit context window]...\n" + user_message[-2000:]
+            self._append_memory({"role": "user", "content": user_message})
+            kwargs = dict(
+                messages=self._truncate_history(self.memory),
+                model=self.model,
+                temperature=temperature,
+            )
+            # Mercury reasoning models default to reasoning_effort=low and can
+            # spend the whole completion budget on encrypted reasoning, returning
+            # empty content. 'instant' is the documented lowest deliberation.
+            if self.model.startswith('mercury-'):
+                kwargs['extra_body'] = {'reasoning_effort': 'instant'}
+            if force_json and (self.model in JSON_MODE_MODELS or any(
+                self.model.startswith(p) for p in ('gpt-4o', 'gpt-4.1', 'gpt-4-turbo')
+            )):
+                kwargs['response_format'] = {"type": "json_object"}
+            chat_completion = _llm_call_with_retry(
+                lambda: OpenAI(api_key=self.openai_api_key,
+                               timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
+                kwargs, self.model)
+            reply = chat_completion.choices[0].message.content or ""
+            self._append_memory({"role": "assistant", "content": reply})
+
+            dur_ms = (time.time() - start_time) * 1000.0
+            usage = getattr(chat_completion, 'usage', None)
+            inp_tok = getattr(usage, 'prompt_tokens', None) if usage else None
+            out_tok = getattr(usage, 'completion_tokens', None) if usage else None
+            self._record_router_query(len(user_message), len(reply), dur_ms, input_tokens=inp_tok, output_tokens=out_tok)
+
+            return reply
+        except Exception as e:
+            # Auth/quota/timeout failures must propagate so the console worker
+            # can rotate to a fallback key; only content-level problems are
+            # swallowed into an empty reply.
+            from openai import (APITimeoutError, APIConnectionError, RateLimitError,
+                                AuthenticationError, PermissionDeniedError, NotFoundError,
+                                APIStatusError)
+            transient_fail = isinstance(e, (APITimeoutError, APIConnectionError, RateLimitError)) or \
+                (isinstance(e, APIStatusError) and getattr(e, 'status_code', 0) >= 500)
+            # With a fallback configured, auth/not-found on the primary also fail over
+            # (e.g. router rejects the key or renamed the model).
+            failoverable = transient_fail or isinstance(e, (AuthenticationError, PermissionDeniedError, NotFoundError))
+            if failoverable:
+                fb = os.getenv('FAULTSEEKER_LLM_FALLBACK_MODEL', '').strip()
+                if fb and fb != self.model:
+                    # Provider-aware fallback: resolve the fallback's OWN endpoint
+                    # and keys (may be a different provider than the primary).
+                    fb_base, fb_env = UniversalAgent._detect_provider(fb)
+                    if fb_env == 'NARAROUTER_API_KEY':
+                        fb_base = os.getenv('NARAROUTER_BASE_URL', fb_base)
+                    if fb_env == 'GROQ_API_KEY':
+                        fb_base = os.getenv('GROQ_BASE_URL', fb_base)
+                    fb_keys = _parse_api_keys(os.getenv(fb_env, ''))
+                    if not fb_keys:
+                        print(f"   [!] fallback model {fb} has no key ({fb_env}); cannot fail over", flush=True)
+                    else:
+                        print(f"   [!] {self.model} exhausted retries ({type(e).__name__}); failing over to {fb} on its own provider", flush=True)
+                        try:
+                            fb_kwargs = dict(messages=self._truncate_history(self.memory),
+                                             model=fb, temperature=0)
+                            cc = _llm_call_with_retry(
+                                lambda: OpenAI(api_key=fb_keys[0], base_url=fb_base,
+                                               timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
+                                fb_kwargs, fb)
+                            reply = cc.choices[0].message.content or ""
+                            self._append_memory({"role": "assistant", "content": reply})
+                            return reply
+                        except Exception as fb_e:  # noqa: BLE001
+                            print(f"   [!] fallback model {fb} also failed ({type(fb_e).__name__})", flush=True)
+                self.memory.append({"role": "assistant", "content": ''})
+                raise
+            if isinstance(e, (AuthenticationError, PermissionDeniedError, NotFoundError)):
+                self.memory.append({"role": "assistant", "content": ''})
+                raise
+            self.memory.append({"role": "assistant", "content": ''})
+            # Demo console visibility: SSE shows stdout, so surface the real
+            # provider error instead of only a generic string.
+            print(f"[!] LLM call failed ({type(e).__name__}): {str(e)[:300]}", flush=True)
+            return "An error occurred."
+
+
+class UniversalAgent(AbstractAgent):
+    """
+    Multi-provider agent supporting Qwen, Grok, Gemini, and any
+    OpenAI-compatible REST API. Automatically selects the right
+    base_url and API key from PROVIDER_CONFIG based on model prefix.
+    """
+
+    def __init__(self, task: str, model_name: str,
+                 base_url: Optional[str] = None,
+                 api_key: Optional[str] = None):
+        load_dotenv()
+        # Auto-detect provider from model prefix
+        detected_base_url, env_var = self._detect_provider(model_name)
+        if env_var == 'NARAROUTER_API_KEY':
+            detected_base_url = os.getenv('NARAROUTER_BASE_URL', detected_base_url)
+        if env_var == 'GROQ_API_KEY':
+            detected_base_url = os.getenv('GROQ_BASE_URL', detected_base_url)
+        if env_var == 'MERCURY_API_KEY':
+            detected_base_url = os.getenv('MERCURY_BASE_URL', detected_base_url)
+        if env_var == 'OPENAI_API_KEY':
+            detected_base_url = os.getenv('OPENAI_BASE_URL', detected_base_url)
+        self.base_url = base_url or detected_base_url
+        # Multiple keys in the env var (newline/comma/space separated, .env-style
+        # tolerated) rotate round-robin per client creation, so provider
+        # per-minute caps add up across keys.
+        raw_keys = api_key or os.getenv(env_var, '')
+        self.api_keys = _parse_api_keys(raw_keys)
+        self.api_key  = self.api_keys[0] if self.api_keys else ''
+        self._key_rr  = 0
+        if not self.api_key:
+            raise ValueError(
+                f"No API key found for model '{model_name}'. "
+                f"Set the '{env_var}' environment variable in .env"
+            )
+        super().__init__(task, model_name=model_name)
+
+    def _next_api_key(self):
+        k = self.api_keys[self._key_rr % len(self.api_keys)]
+        self._key_rr += 1
+        return k
+
+    @staticmethod
+    def _detect_provider(model_name: str):
+        for prefix, config in PROVIDER_CONFIG.items():
+            if model_name.startswith(prefix):
+                return config  # (base_url, env_var)
+        # Default to OpenAI
+        return 'https://api.openai.com/v1', 'OPENAI_API_KEY'
+
+    def _truncate_history(self, history, max_turns=1):
+        system_prompt = history[0]
+        message_pairs = history[1:]
+        truncated = message_pairs[-(max_turns * 2):]
+        return [system_prompt] + truncated
+
+    def _send_message(self, user_message: str, temperature: float = 0, force_json=True) -> str:
+        start_time = time.time()
+        try:
+            if len(user_message) > 10000:
+                user_message = user_message[:8000] + "\n...[middle truncated to fit context window]...\n" + user_message[-2000:]
+            self._append_memory({"role": "user", "content": user_message})
+            kwargs = dict(
+                messages=self._truncate_history(self.memory),
+                model=self.model,
+                temperature=temperature,
+            )
+            # Mercury reasoning models default to reasoning_effort=low and can
+            # spend the whole completion budget on encrypted reasoning, returning
+            # empty content. 'instant' is the documented lowest deliberation.
+            if self.model.startswith('mercury-'):
+                kwargs['extra_body'] = {'reasoning_effort': 'instant'}
+            # Enable JSON mode if model supports it
+            if force_json and self.model in JSON_MODE_MODELS:
+                kwargs['response_format'] = {"type": "json_object"}
+            chat_completion = _llm_call_with_retry(
+                lambda: OpenAI(api_key=self._next_api_key(), base_url=self.base_url,
+                               timeout=LLM_CALL_TIMEOUT_SECS, max_retries=0),
+                kwargs, self.model)
+            reply = chat_completion.choices[0].message.content or ""
+            self._append_memory({"role": "assistant", "content": reply})
+
+            dur_ms = (time.time() - start_time) * 1000.0
+            usage = getattr(chat_completion, 'usage', None)
+            inp_tok = getattr(usage, 'prompt_tokens', None) if usage else None
+            out_tok = getattr(usage, 'completion_tokens', None) if usage else None
+            self._record_router_query(len(user_message), len(reply), dur_ms, input_tokens=inp_tok, output_tokens=out_tok)
+
+            return reply
+        except Exception as e:
+            # Auth/quota/timeout failures must propagate so the console worker
+            # can rotate to a fallback key; only content-level problems are
+            # swallowed into an empty reply.
+            from openai import (APITimeoutError, APIConnectionError, RateLimitError,
+                                AuthenticationError, PermissionDeniedError, NotFoundError)
+            if isinstance(e, (APITimeoutError, APIConnectionError, RateLimitError,
+                              AuthenticationError, PermissionDeniedError, NotFoundError)):
+                self.memory.append({"role": "assistant", "content": ''})
+                raise
+            self.memory.append({"role": "assistant", "content": ''})
+            # Demo console visibility: SSE shows stdout, so surface the real
+            # provider error instead of only a generic string.
+            print(f"[!] LLM call failed ({type(e).__name__}): {str(e)[:300]}", flush=True)
+            return "An error occurred."
+
+
+def build_provider_agent(task: str, model_name: str) -> AbstractAgent:
+    """
+    Factory — returns the right agent class for a given model name.
+
+    Supported prefixes:
+      gpt-*, o1-*, o3-*, o4-*  → GPTAgent (OpenAI)
+      grok-*                   → UniversalAgent (xAI)
+      qwen-*                   → UniversalAgent (Alibaba DashScope)
+      gemini-*                 → UniversalAgent (Google)
+      claude-*                 → NOT SUPPORTED (Anthropic SDK required)
+      <anything else>          → OllmaAgent (local Ollama)
+    """
+    # Claude requires the Anthropic SDK, which is not integrated here.
+    # Routing through OpenAI-compatible UniversalAgent silently fails
+    # (different auth headers, different request schema). Fail fast instead.
+    if model_name.startswith('claude-'):
+        raise NotImplementedError(
+            f"Claude model '{model_name}' is not supported. "
+            "Install the 'anthropic' package and implement an AnthropicAgent, "
+            "or choose a supported model (gpt-*, gemini-*, grok-*, qwen-*, or a local Ollama model)."
+        )
+
+    cloud_prefixes = tuple(PROVIDER_CONFIG.keys())
+    if not any(model_name.startswith(p) for p in cloud_prefixes):
+        return OllmaAgent(task, model_name)
+    openai_prefixes = ('gpt-', 'o1-', 'o3-', 'o4-')
+    if any(model_name.startswith(p) for p in openai_prefixes):
+        return GPTAgent(task, model_name)
+    return UniversalAgent(task, model_name)
