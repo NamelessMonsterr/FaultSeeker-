@@ -443,3 +443,41 @@ def test_identical_duplicate_struct_still_binds():
     res = bind_function(_bundle('Target', abi), parsed, sel, lines)
     assert res['status'] == 'direct_verified'
     assert 'return c.a' in res['bodies'][0]['content']
+
+
+def test_qualified_struct_resolves_named_namespace():
+    src = {'B.sol': ("pragma solidity ^0.8.0;\n"
+                     "contract Base { struct S { uint256 a; } }\n"
+                     "contract Target is Base {\n"
+                     "    function f(Base.S memory s) public returns (uint256) { return 1; }\n"
+                     "}\n")}
+    parsed, lines = _parsed(src)
+    abi = [{'type': 'function', 'name': 'f',
+            'inputs': [{'name': 's', 'type': 'tuple', 'internalType': 'struct Base.S',
+                        'components': [{'name': 'a', 'type': 'uint256'}]}],
+            'outputs': []}]
+    sel = function_selector('f', abi[0]['inputs'])
+    res = bind_function(_bundle('Target', abi), parsed, sel, lines)
+    assert res['status'] == 'direct_verified'
+    assert 'return 1' in res['bodies'][0]['content']
+
+
+def test_same_layout_overload_via_qualified_name_fails_closed():
+    """f(Base.S) and f(S) with identical layouts produce the same canonical
+    signature; two executable bodies match, so binding must fail closed."""
+    src = {'B.sol': ("pragma solidity ^0.8.0;\n"
+                     "contract Base { struct S { uint256 a; } }\n"
+                     "contract Target is Base {\n"
+                     "    struct S { uint256 a; }\n"
+                     "    function f(Base.S memory s) public returns (uint256) { return 1; }\n"
+                     "    function f(S memory s) public returns (uint256) { return 2; }\n"
+                     "}\n")}
+    parsed, lines = _parsed(src)
+    abi = [{'type': 'function', 'name': 'f',
+            'inputs': [{'name': 's', 'type': 'tuple', 'internalType': 'struct Base.S',
+                        'components': [{'name': 'a', 'type': 'uint256'}]}],
+            'outputs': []}]
+    sel = function_selector('f', abi[0]['inputs'])
+    res = bind_function(_bundle('Target', abi), parsed, sel, lines)
+    assert res['status'] == 'unresolved'
+    assert res['reason'] == 'multiple_bodies_in_contract'
