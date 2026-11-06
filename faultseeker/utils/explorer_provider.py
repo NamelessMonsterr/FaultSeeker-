@@ -182,6 +182,7 @@ _CHAIN_EXPLORERS: dict[str, list[tuple[str, str, int]]] = {
     'eth': [
         ('https://api.etherscan.io/api',            'ETHERSCAN_API_KEY',          90),
         ('https://api.etherscan.io/api',            'ETHERSCAN_API_KEY_2',         70),  # second key
+        ('https://eth.blockscout.com/api',          '',                            65),  # keyless fallback
     ],
     # ── BNB Smart Chain ───────────────────────────────────────────────────────
     'bsc': [
@@ -348,6 +349,8 @@ def explorer_call(chain: str, params: dict, timeout: int = 20) -> dict | None:
         log.warning(f'No explorer endpoints configured for chain: {chain}')
         return None
 
+    soft_failure = None  # first API-level non-success response (endpoint alive)
+
     for ep in endpoints:
         if ep.is_circuit_open:
             log.debug(f'[explorer circuit SKIP] {ep.base_url[:50]}')
@@ -361,12 +364,26 @@ def explorer_call(chain: str, params: dict, timeout: int = 20) -> dict | None:
                 data = json.loads(resp.read().decode('utf-8', errors='ignore'))
             ms = (time.time() - t0) * 1000
 
-            # Application-level error classification
-            msg = str(data.get('message', '') or data.get('result', ''))
-            if any(w in msg.lower() for w in ('invalid api key', 'unauthorized', 'missing apikey')):
+            # Application-level error classification. Etherscan-style APIs put
+            # 'NOTOK' in message and the real reason in result, so both fields
+            # must be examined - otherwise an auth/rate-limit failure counts as
+            # success and failover never happens.
+            msg = f"{data.get('message', '')} {data.get('result', '')}".lower()
+            if any(w in msg for w in ('invalid api key', 'invalid apikey', 'unauthorized', 'missing apikey', 'missing api key', 'missing/invalid api key')):
                 raise _AuthError(msg)
-            if 'rate limit' in msg.lower() or data.get('status') == '0' and 'max rate' in msg.lower():
+            if 'rate limit' in msg or 'max rate' in msg:
                 raise _RateLimitError(msg)
+
+            # Validate status + payload, not just HTTP 200: a status != '1'
+            # response (deprecated endpoint, contract not verified, empty
+            # result) must not look like success. Try the next endpoint and
+            # preserve the primary's answer if every endpoint answers the same.
+            if str(data.get('status', '')) != '1' or not data.get('result'):
+                log.debug(f'[explorer SOFT-FAIL] {ep.base_url[:42]} {params.get("action","")}: {msg[:80]}')
+                ep.reward(ms)
+                if soft_failure is None:
+                    soft_failure = data
+                continue
 
             log.debug(f'[explorer OK] {ep.base_url[:42]} {params.get("action","")} {ms:.0f}ms')
             ep.reward(ms)
@@ -388,6 +405,9 @@ def explorer_call(chain: str, params: dict, timeout: int = 20) -> dict | None:
             ep.penalize(ms, _ExplorerEndpoint.PENALTY_5XX)
             log.warning(f'[explorer FAIL] {ep.base_url[:42]}: {exc} ({ms:.0f}ms)')
 
+    if soft_failure is not None:
+        log.warning(f'All explorer endpoints returned no result for {chain}:{params.get("action","")}')
+        return soft_failure
     log.error(f'All explorer endpoints failed for {chain}:{params.get("action","")}')
     return None
 
