@@ -681,5 +681,3 @@ def build_provider_agent(task: str, model_name: str) -> AbstractAgent:
     if any(model_name.startswith(p) for p in openai_prefixes):
         return GPTAgent(task, model_name)
     return UniversalAgent(task, model_name)
-
-
