@@ -8,6 +8,9 @@ import networkx as nx
 from copy import deepcopy
 import time
 from faultseeker.data_collection.contract_downloader import ContractDownloader
+from faultseeker.utils.source_binding import (
+    is_selector, parse_source_units, bind_function,
+)
 from faultseeker.function_analysis.function_ranker import RankingResult
 from faultseeker.prompts.function_analysis import (
     OrchestrationSessionPrompts,
@@ -518,11 +521,46 @@ class FunctionAnalyzer:
             if i >= max_iterations:
                 break
         
+    def _binding_for_address(self, address):
+        """Fetch + parse the verified source bundle once per address for
+        selector->body binding. Cached; a retrieval failure caches None so the
+        sourceless state is explicit and not retried as an empty success."""
+        if not hasattr(self, '_source_binding_cache'):
+            self._source_binding_cache = {}
+        if address not in self._source_binding_cache:
+            bundle = ContractDownloader.get_source_bundle(self.analysis_result.chain, address)
+            if bundle is None:
+                self._source_binding_cache[address] = None
+            else:
+                lines_by_path = {p: c.split('\n') for p, c in bundle['sources'].items()}
+                parsed = parse_source_units(bundle['sources'])
+                self._source_binding_cache[address] = (bundle, parsed, lines_by_path)
+        return self._source_binding_cache[address]
+
     def _retrieve_source_code(self, address, function_name):
         print(f"   [i] retrieving source for {function_name} @ {address[:10]}...", flush=True)
         output = []
         output_memo = []
         address = address.lower()
+        if is_selector(function_name):
+            # Model-facing identity is a 4-byte selector. Bind through the ABI
+            # canonical signature and contract scope; never via plain name.
+            record = self._binding_for_address(address)
+            if record is None:
+                print(f"   [!] no verified source for {address[:10]}; source unavailable", flush=True)
+                return output
+            bundle, parsed, lines_by_path = record
+            result = bind_function(bundle, parsed, function_name, lines_by_path)
+            if result['status'] in ('direct_verified', 'inherited_verified'):
+                for body in result['bodies']:
+                    if body['start_line'] <= body['end_line'] and body['content'] not in output_memo:
+                        output_memo.append(body['content'])
+                        output.append({'path': body['path'], 'source_code': body['content'],
+                                       'binding': result['status'], 'signature': body['signature']})
+            else:
+                print(f"   [!] source binding unresolved for {function_name} @ {address[:10]}: "
+                      f"{result['reason']}", flush=True)
+            return output
         contract_info = self.contract_info
         if address not in self.contract_info:
             contract_info = ContractDownloader(self.analysis_result.chain,[address]).run()
