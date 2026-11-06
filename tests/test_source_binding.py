@@ -578,3 +578,46 @@ def test_qualified_base_without_import_alias_fails_closed():
     res = bind_function(_bundle('Target', F_UINT_ABI), parsed, sel, lines)
     assert res['status'] == 'unresolved'
     assert res['reason'].startswith('unsupported_ancestry')
+
+
+def test_commented_import_alias_does_not_overwrite_real_alias():
+    """Reviewer case: a LINE COMMENT holding `import {Other as B}` must not
+    overwrite the real `import {Base as B}` - imports come from parse tokens,
+    never raw text."""
+    src = {
+        'Base.sol': ("pragma solidity ^0.8.0;\n"
+                     "contract Base { function f(uint256 x) public returns (uint256) { return 1; } }\n"),
+        'Other.sol': ("pragma solidity ^0.8.0;\n"
+                      "contract B { function f(uint256 x) public returns (uint256) { return 999; } }\n"),
+        'Target.sol': ("pragma solidity ^0.8.0;\nimport {Base as B} from './Base.sol';\n"
+                       "//import {Other as B} from './Other.sol';\n"
+                       "contract Target is B {}\n"),
+    }
+    parsed, lines = _parsed(src)
+    sel = function_selector('f', F_UINT_ABI[0]['inputs'])
+    res = bind_function(_bundle('Target', F_UINT_ABI), parsed, sel, lines)
+    assert res['status'] == 'inherited_verified'
+    assert res['bodies'][0]['contract'] == 'Base'
+    assert 'return 1' in res['bodies'][0]['content']
+
+
+def test_block_comment_and_string_import_text_are_not_imports():
+    """Block comments and string literals containing import-like text are not
+    import directives."""
+    src = {
+        'Base.sol': ("pragma solidity ^0.8.0;\n"
+                     "contract Base { function f(uint256 x) public returns (uint256) { return 1; } }\n"),
+        'Other.sol': ("pragma solidity ^0.8.0;\n"
+                      "contract B { function f(uint256 x) public returns (uint256) { return 999; } }\n"),
+        'Target.sol': ("pragma solidity ^0.8.0;\nimport {Base as B} from './Base.sol';\n"
+                       "/* import {Other as B} from './Other.sol'; */\n"
+                       "contract Target is B {\n"
+                       "    string constant NOTE = \"import {Other as B} from './Other.sol';\";\n"
+                       "}\n"),
+    }
+    parsed, lines = _parsed(src)
+    sel = function_selector('f', F_UINT_ABI[0]['inputs'])
+    res = bind_function(_bundle('Target', F_UINT_ABI), parsed, sel, lines)
+    assert res['status'] == 'inherited_verified'
+    assert res['bodies'][0]['contract'] == 'Base'
+    assert 'return 1' in res['bodies'][0]['content']
