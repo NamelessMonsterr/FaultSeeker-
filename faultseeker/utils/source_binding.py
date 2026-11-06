@@ -47,9 +47,6 @@ log = logging.getLogger('faultseeker.source_binding')
 
 _SELECTOR_RE = re.compile(r'^0x[0-9a-fA-F]{8}$')
 _ARRAY_SUFFIX_RE = re.compile(r'(\[\d*\])+$')
-_IMPORT_SYMS_RE = re.compile(r'import\s*\{([^}]*)\}\s*from\s*["\']([^"\']+)["\']')
-_IMPORT_STAR_RE = re.compile(r'import\s*\*\s*as\s+(\w+)\s*from\s*["\']([^"\']+)["\']')
-_IMPORT_PLAIN_RE = re.compile(r'import\s*["\']([^"\']+)["\']')
 
 
 class UnresolvableType(Exception):
@@ -192,26 +189,76 @@ class _ScopedListener(SolidityListener):
         self.enums.add((self.current_contract, ctx.identifier().getText()))
 
 
-def _parse_imports(code: str) -> dict:
-    """Parse a source unit's import directives.
-    Returns {'symbols': {alias: (path, original)}, 'file_aliases': {alias: path},
-    'plain': [path, ...]}."""
-    symbols, file_aliases, plain = {}, {}, []
-    for names, imp in _IMPORT_SYMS_RE.findall(code):
-        for part in names.split(','):
-            part = part.strip()
-            if not part:
-                continue
-            m = re.match(r'^(\w+)\s+as\s+(\w+)$', part)
-            if m:
-                symbols[m.group(2)] = (imp, m.group(1))
-            else:
-                symbols[part] = (imp, part)
-    for alias, imp in _IMPORT_STAR_RE.findall(code):
-        file_aliases[alias] = imp
-    for imp in _IMPORT_PLAIN_RE.findall(code):
-        plain.append(imp)
-    return {'symbols': symbols, 'file_aliases': file_aliases, 'plain': plain}
+def _parse_import_tokens(tokens) -> dict:
+    """Extract import directives from a LEXED token stream.
+
+    Token-level scanning is comment- and string-literal-safe: comment and
+    string contents never become `import` tokens. (This grammar's lexer emits
+    'from' as Identifier, so parse-tree importDirective rules error-recover
+    and lose the path - the token stream is the reliable source.)
+    Returns {'symbols': {alias: (path, orig)}, 'file_aliases': {alias: path},
+    'plain': [path]}.
+    """
+    imports = {'symbols': {}, 'file_aliases': {}, 'plain': []}
+    toks = [t for t in tokens.tokens if t.channel == 0 and t.type != -1]
+
+    def text(i):
+        return toks[i].text if 0 <= i < len(toks) else None
+
+    i = 0
+    while i < len(toks):
+        if text(i) != 'import':
+            i += 1
+            continue
+        j = i + 1
+        try:
+            if text(j) and text(j).startswith(("'", '"')) and len(text(j)) >= 2:
+                # import "path";  /  import "path" as Q;
+                path = text(j)[1:-1]
+                if text(j + 1) == 'as' and text(j + 2):
+                    imports['file_aliases'][text(j + 2)] = path
+                else:
+                    imports['plain'].append(path)
+            elif text(j) in ('*',) or (text(j) and text(j) not in ('{',)):
+                # import * as Q from "path";  /  import Q from "path";
+                k = j + 1
+                alias = None
+                if text(j) == '*':
+                    if text(k) == 'as':
+                        alias = text(k + 1)
+                        k += 2
+                else:
+                    if text(k) == 'as':
+                        alias = text(k + 1)
+                        k += 2
+                    else:
+                        alias = text(j)
+                if text(k) == 'from' and text(k + 1) and text(k + 1).startswith(("'", '"')):
+                    if alias:
+                        imports['file_aliases'][alias] = text(k + 1)[1:-1]
+            if text(j) == '{':
+                k = j + 1
+                decls = []
+                while text(k) and text(k) != '}':
+                    if text(k) == ',':
+                        k += 1
+                        continue
+                    orig = text(k)
+                    k += 1
+                    if text(k) == 'as':
+                        decls.append((text(k + 1), orig))
+                        k += 2
+                    else:
+                        decls.append((orig, orig))
+                # expect: } from "path"
+                if text(k) == '}' and text(k + 1) == 'from' and text(k + 2) and text(k + 2).startswith(("'", '"')):
+                    path = text(k + 2)[1:-1]
+                    for alias, orig in decls:
+                        imports['symbols'][alias] = (path, orig)
+        except Exception:
+            pass  # a malformed directive yields no identity, never a guess
+        i += 1
+    return imports
 
 
 def parse_source_units(sources: dict) -> dict:
@@ -220,13 +267,14 @@ def parse_source_units(sources: dict) -> dict:
     combined = {'contracts': {}, 'structs': {}, 'enums': set(), 'contract_names': set(), 'imports': {},
                 'sources_paths': set(sources.keys())}
     for path, code in sources.items():
-        combined['imports'][path] = _parse_imports(code)
         lis = _ScopedListener(path)
         try:
             input_stream = antlr4.InputStream(code)
             lexer = SolidityLexer(input_stream)
             lexer.removeErrorListeners()
             tokens = antlr4.CommonTokenStream(lexer)
+            tokens.fill()
+            combined['imports'][path] = _parse_import_tokens(tokens)
             parser = SolidityParser(tokens)
             parser.removeErrorListeners()
             antlr4.ParseTreeWalker().walk(lis, parser.sourceUnit())
