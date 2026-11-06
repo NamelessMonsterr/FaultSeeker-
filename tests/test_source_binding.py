@@ -405,11 +405,11 @@ def test_ambiguous_ancestor_fails_closed():
     src = {'Base.sol': BASE_SRC,
            'LibA.sol': "pragma solidity ^0.8.0;\ncontract Shared { struct Point { uint256 x; uint256 y; } function move(Point memory p) public returns (bool) { return true; } }\n",
            'LibB.sol': "pragma solidity ^0.8.0;\ncontract Shared { struct Point { uint256 x; uint256 y; } function move(Point memory p) public returns (bool) { return false; } }\n",
-           'Child.sol': "pragma solidity ^0.8.0;\nimport './LibA.sol';\ncontract Child is Shared { function z() public returns (uint256) { return 1; } }\n"}
+           'Child.sol': "pragma solidity ^0.8.0;\nimport './LibA.sol';\nimport './LibB.sol';\ncontract Child is Shared { function z() public returns (uint256) { return 1; } }\n"}
     parsed, lines = _parsed(src)
     res = bind_function(_bundle('Child', MOVE_ABI), parsed, MOVE_SEL, lines)
     assert res['status'] == 'unresolved'
-    assert res['reason'] == 'duplicate_contract_declarations'
+    assert res['reason'].startswith('unsupported_ancestry')
 
 
 def test_ambiguous_file_level_struct_fails_closed():
@@ -656,3 +656,39 @@ def test_direct_import_exact_key_still_resolves():
     assert res['status'] == 'inherited_verified'
     assert res['bodies'][0]['contract'] == 'Base'
     assert 'return 1' in res['bodies'][0]['content']
+
+
+def test_plain_import_binds_imported_source_over_decoy():
+    """Plain `import './Actual.sol'` gives Base its source identity: the
+    imported file's Base is bound, never the unrelated Decoy.sol::Base."""
+    src = {
+        'Actual.sol': ("pragma solidity ^0.8.0;\n"
+                       "contract Base { function f(uint256 x) public returns (uint256) { return 1; } }\n"),
+        'Decoy.sol': ("pragma solidity ^0.8.0;\n"
+                      "contract Base { function f(uint256 x) public returns (uint256) { return 999; } }\n"),
+        'Target.sol': ("pragma solidity ^0.8.0;\nimport './Actual.sol';\n"
+                       "contract Target is Base {}\n"),
+    }
+    parsed, lines = _parsed(src)
+    sel = function_selector('f', F_UINT_ABI[0]['inputs'])
+    res = bind_function(_bundle('Target', F_UINT_ABI), parsed, sel, lines)
+    assert res['status'] == 'inherited_verified'
+    assert res['bodies'][0]['contract'] == 'Base'
+    assert 'return 1' in res['bodies'][0]['content']
+
+
+def test_plain_import_missing_source_fails_closed_not_decoy():
+    """Reviewer mustfix: Target.sol plainly imports './Actual.sol' but the
+    partial bundle omits it, while an unrelated Decoy.sol::Base exists. The
+    unprovable ownership must fail closed - never bind the decoy."""
+    src = {
+        'Decoy.sol': ("pragma solidity ^0.8.0;\n"
+                      "contract Base { function f(uint256 x) public returns (uint256) { return 999; } }\n"),
+        'Target.sol': ("pragma solidity ^0.8.0;\nimport './Actual.sol';\n"
+                       "contract Target is Base {}\n"),
+    }
+    parsed, lines = _parsed(src)
+    sel = function_selector('f', F_UINT_ABI[0]['inputs'])
+    res = bind_function(_bundle('Target', F_UINT_ABI), parsed, sel, lines)
+    assert res['status'] == 'unresolved'
+    assert res['reason'].startswith('unsupported_ancestry')
