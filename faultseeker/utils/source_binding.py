@@ -244,15 +244,20 @@ def _canonical_source_type(type_text: str, scope_contract, parsed, _seen=None) -
     if re.fullmatch(r'(u?int\d*|u?fixed\d*x\d*|bytes\d*|address|bool|string|byte)', elem):
         return f'{elem}{suffix}'
     if '.' in base:
-        # Qualified name: resolve ONLY in the named namespace. Stripping the
-        # qualifier could bind a same-name type from another scope with a
-        # different layout, a false signature identity.
+        # Qualified name: resolve in the named namespace. The qualifier may be
+        # an import alias (Lib.Base.S -> contract Base, struct S), so also try
+        # the qualifier's simple name; any ambiguity fails closed.
         qualifier, simple = base.rsplit('.', 1)
-        if (qualifier, simple) in parsed['enums']:
+        scopes = {qualifier, qualifier.split('.')[-1]}
+        if any((sc, simple) in parsed['enums'] for sc in scopes):
             return f'uint8{suffix}'
-        defs = parsed['structs'].get((qualifier, simple), set())
+        defs = set()
+        for sc in scopes:
+            defs |= parsed['structs'].get((sc, simple), set())
         if len(defs) == 1:
             return _expand_struct(simple, next(iter(defs)), qualifier, parsed, suffix, _seen)
+        if len(defs) > 1:
+            raise UnresolvableType(f'ambiguous qualified struct {base}')
         if simple in parsed['contract_names']:
             return f'address{suffix}'
         raise UnresolvableType(f'unresolved qualified type: {type_text!r}')
@@ -345,7 +350,10 @@ def bind_function(bundle: dict, parsed: dict, selector: str, lines_by_path: dict
         return {'status': 'unresolved', 'bodies': [], 'reason': 'duplicate_contract_declarations'}
 
     def matching_bodies(contract_name):
-        out = []
+        """(matches, unresolvable) among executable bodies of fn['name'].
+        An unresolvable same-name declaration shadows ancestors (Solidity name
+        hiding), so it must force fail-closed, never a silent fallthrough."""
+        out, unresolvable = [], False
         for entry in _sole_def(contract_name, parsed)['functions'].get(fn['name'], []):
             if not entry['has_body']:
                 continue
@@ -353,22 +361,31 @@ def bind_function(bundle: dict, parsed: dict, selector: str, lines_by_path: dict
                 if _source_signature(entry, parsed) == target_sig:
                     out.append((contract_name, entry))
             except UnresolvableType:
-                continue  # cannot prove identity; never bind on partial match
-        return out
+                unresolvable = True
+        return out, unresolvable
 
     try:
-        direct = matching_bodies(contract)
+        direct, direct_unresolvable = matching_bodies(contract)
+        target_declared = bool(_sole_def(contract, parsed)['functions'].get(fn['name']))
     except AmbiguousContract:
         return {'status': 'unresolved', 'bodies': [], 'reason': 'duplicate_contract_declarations'}
-    if len(direct) == 1:
+    if len(direct) == 1 and not direct_unresolvable:
         kind, found = 'direct_verified', direct
     elif len(direct) > 1:
         return {'status': 'unresolved', 'bodies': [], 'reason': 'multiple_bodies_in_contract'}
+    elif direct_unresolvable:
+        return {'status': 'unresolved', 'bodies': [], 'reason': 'unresolvable_direct_signature'}
+    elif target_declared:
+        # same-name declaration(s) exist but none has a provable matching body
+        return {'status': 'unresolved', 'bodies': [], 'reason': 'no_executable_body'}
     else:
         try:
             found = []
             for anc in _ancestors(contract, parsed):
-                found.extend(matching_bodies(anc))
+                matches, anc_unresolvable = matching_bodies(anc)
+                if anc_unresolvable:
+                    return {'status': 'unresolved', 'bodies': [], 'reason': 'unresolvable_inherited_signature'}
+                found.extend(matches)
         except AmbiguousContract:
             return {'status': 'unresolved', 'bodies': [], 'reason': 'duplicate_contract_declarations'}
         if not found:
