@@ -207,7 +207,11 @@ def parse_source_units(sources: dict) -> dict:
             # library versions in one bundle). Keep every definition so binding
             # can fail closed instead of silently binding the surviving body.
             combined['contracts'].setdefault(cname, []).append(cdata)
-        combined['structs'].update(lis.structs)
+        for key, members in lis.structs.items():
+            # Same-name structs in different source units may have different
+            # layouts. Keep distinct definitions so lookups can fail closed;
+            # identical duplicates (flattened bundles) dedupe away.
+            combined['structs'].setdefault(key, set()).add(tuple(members))
         combined['enums'] |= lis.enums
         combined['contract_names'] |= lis.contract_names
     return combined
@@ -235,8 +239,11 @@ def _canonical_source_type(type_text: str, scope_contract, parsed, _seen=None) -
         return f'uint8{suffix}'
     if name in parsed['contract_names']:
         return f'address{suffix}'
-    members = parsed['structs'].get((scope_contract, name)) or parsed['structs'].get((None, name))
-    if members is not None:
+    defs = parsed['structs'].get((scope_contract, name), set()) | parsed['structs'].get((None, name), set())
+    if len(defs) > 1:
+        raise UnresolvableType(f'ambiguous struct {name}: {len(defs)} distinct declarations')
+    if defs:
+        members = next(iter(defs))
         _seen = _seen or set()
         if name in _seen:
             raise UnresolvableType(f'recursive struct {name}')
