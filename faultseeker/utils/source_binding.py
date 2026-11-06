@@ -144,7 +144,7 @@ class _ScopedListener(SolidityListener):
                 bases.append(base)
         self.current_contract = name
         self.contract_names.add(name)
-        self.contracts[name] = {'kind': kind, 'bases': bases, 'functions': {}, 'path': self.path}
+        self.contracts[name] = {'name': name, 'kind': kind, 'bases': bases, 'functions': {}, 'path': self.path}
 
     def exitContractDefinition(self, ctx):
         self.current_contract = None
@@ -393,9 +393,10 @@ def _resolve_import_path(imp: str, from_path: str, parsed):
     return None
 
 
-def _resolve_base(base: str, from_path: str, parsed) -> str:
+def _resolve_base(base: str, from_path: str, parsed):
     """Resolve a raw (possibly qualified / import-aliased) base-class name to
-    the globally unique contract name it refers to.
+    the exact contract definition it refers to (None when the name is not
+    declared in any provable scope).
 
     Import/source identity rules:
       - `X as Y` symbol import: Y resolves ONLY to X in the imported file.
@@ -403,8 +404,14 @@ def _resolve_base(base: str, from_path: str, parsed) -> str:
       - Any other qualified name (Q.Name without a matching file alias) is
         unsupported and fails closed - qualifier stripping could bind an
         unrelated same-named contract.
-      - A plain name resolves by global name, requiring exactly one
-        declaration in the bundle (duplicates fail closed in _sole_def).
+      - A plain name resolves by source identity: same-file declaration
+        first, else the declarations brought in by the file's plain
+        `import "path"` directives (each import must resolve to a bundle
+        source). Zero or multiple candidate declarations fail closed - an
+        omitted partial-bundle source must never let an unrelated same-named
+        contract elsewhere in the bundle be bound. Only when the file has no
+        import directives at all (flatten-style) does the name fall back to a
+        globally unique declaration (duplicates fail closed in _sole_def).
     """
     imports = parsed['imports'].get(from_path, {'symbols': {}, 'file_aliases': {}, 'plain': []})
     if '.' in base:
@@ -418,7 +425,7 @@ def _resolve_base(base: str, from_path: str, parsed) -> str:
         defs = [d for d in parsed['contracts'].get(name, []) if d['path'] == resolved_path]
         if len(defs) != 1:
             raise UnsupportedAncestry(f'{len(defs)} declarations of {name} in {resolved_path}')
-        return name
+        return defs[0]
     sym = imports['symbols'].get(base)
     if sym is not None:
         imp, orig = sym
@@ -428,22 +435,45 @@ def _resolve_base(base: str, from_path: str, parsed) -> str:
         defs = [d for d in parsed['contracts'].get(orig, []) if d['path'] == resolved_path]
         if len(defs) != 1:
             raise UnsupportedAncestry(f'{len(defs)} declarations of {orig} in {resolved_path}')
-        return orig
-    return base
+        return defs[0]
+    defs = parsed['contracts'].get(base, [])
+    same_file = [d for d in defs if d['path'] == from_path]
+    if len(same_file) > 1:
+        raise UnsupportedAncestry(f'duplicate same-file declarations of {base}')
+    if same_file:
+        return same_file[0]
+    plain = imports['plain']
+    if plain:
+        imported = []
+        for imp in plain:
+            resolved_path = _resolve_import_path(imp, from_path, parsed)
+            if resolved_path is None:
+                raise UnsupportedAncestry(f'import {imp} not in bundle')
+            imported.extend(d for d in defs if d['path'] == resolved_path)
+        if len(imported) != 1:
+            raise UnsupportedAncestry(f'{len(imported)} imported declarations of {base}')
+        return imported[0]
+    if imports['symbols'] or imports['file_aliases']:
+        raise UnsupportedAncestry(f'base {base} not found in same file or imports')
+    if not defs:
+        return None
+    return _sole_def(base, parsed)  # flatten-style: unique global or AmbiguousContract
 
 
-def _ancestors(contract: str, parsed) -> set:
-    seen, stack = set(), [contract]
+def _ancestors(contract: str, parsed) -> list:
+    seen, order, stack = set(), [], [_sole_def(contract, parsed)]
     while stack:
-        cur = stack.pop()
-        cur_def = _sole_def(cur, parsed)
+        cur_def = stack.pop()
         for raw_base in cur_def.get('bases', []):
-            base = _resolve_base(raw_base, cur_def.get('path', ''), parsed)
-            if base in parsed['contracts'] and base not in seen:
-                _sole_def(base, parsed)  # ambiguous lineage fails closed
-                seen.add(base)
-                stack.append(base)
-    return seen
+            base_def = _resolve_base(raw_base, cur_def.get('path', ''), parsed)
+            if base_def is None:
+                continue
+            key = (base_def.get('name'), base_def.get('path'))
+            if key not in seen:
+                seen.add(key)
+                order.append(base_def)
+                stack.append(base_def)
+    return order
 
 
 def bind_function(bundle: dict, parsed: dict, selector: str, lines_by_path: dict):
@@ -491,24 +521,24 @@ def bind_function(bundle: dict, parsed: dict, selector: str, lines_by_path: dict
     except AmbiguousContract:
         return {'status': 'unresolved', 'bodies': [], 'reason': 'duplicate_contract_declarations'}
 
-    def matching_bodies(contract_name):
+    def matching_bodies(contract_def):
         """(matches, unresolvable) among executable bodies of fn['name'].
         An unresolvable same-name declaration shadows ancestors (Solidity name
         hiding), so it must force fail-closed, never a silent fallthrough."""
         out, unresolvable = [], False
-        for entry in _sole_def(contract_name, parsed)['functions'].get(fn['name'], []):
+        for entry in contract_def['functions'].get(fn['name'], []):
             if not entry['has_body']:
                 continue
             try:
                 if _source_signature(entry, parsed) == target_sig:
-                    out.append((contract_name, entry))
+                    out.append((entry['contract'], entry))
             except UnresolvableType:
                 unresolvable = True
         return out, unresolvable
 
     try:
-        direct, direct_unresolvable = matching_bodies(contract)
-        target_declared = bool(_sole_def(contract, parsed)['functions'].get(fn['name']))
+        direct, direct_unresolvable = matching_bodies(target_def)
+        target_declared = bool(target_def['functions'].get(fn['name']))
     except AmbiguousContract:
         return {'status': 'unresolved', 'bodies': [], 'reason': 'duplicate_contract_declarations'}
     if len(direct) == 1 and not direct_unresolvable:
@@ -523,8 +553,8 @@ def bind_function(bundle: dict, parsed: dict, selector: str, lines_by_path: dict
     else:
         try:
             found = []
-            for anc in _ancestors(contract, parsed):
-                matches, anc_unresolvable = matching_bodies(anc)
+            for anc_def in _ancestors(contract, parsed):
+                matches, anc_unresolvable = matching_bodies(anc_def)
                 if anc_unresolvable:
                     return {'status': 'unresolved', 'bodies': [], 'reason': 'unresolvable_inherited_signature'}
                 found.extend(matches)
