@@ -226,6 +226,15 @@ def _split_array_suffix(t: str):
     return t.strip(), ''
 
 
+def _expand_struct(name: str, members, scope_contract, parsed, suffix, _seen) -> str:
+    _seen = _seen or set()
+    if name in _seen:
+        raise UnresolvableType(f'recursive struct {name}')
+    _seen = _seen | {name}
+    inner = ','.join(_canonical_source_type(m, scope_contract, parsed, _seen) for m in members)
+    return f'({inner}){suffix}'
+
+
 def _canonical_source_type(type_text: str, scope_contract, parsed, _seen=None) -> str:
     t = type_text.replace(' payable', '').replace('payable', '').strip()
     for kw in ('memory', 'calldata', 'storage'):
@@ -234,7 +243,20 @@ def _canonical_source_type(type_text: str, scope_contract, parsed, _seen=None) -
     elem = _canonical_elementary(base)
     if re.fullmatch(r'(u?int\d*|u?fixed\d*x\d*|bytes\d*|address|bool|string|byte)', elem):
         return f'{elem}{suffix}'
-    name = base.split('.')[-1]
+    if '.' in base:
+        # Qualified name: resolve ONLY in the named namespace. Stripping the
+        # qualifier could bind a same-name type from another scope with a
+        # different layout, a false signature identity.
+        qualifier, simple = base.rsplit('.', 1)
+        if (qualifier, simple) in parsed['enums']:
+            return f'uint8{suffix}'
+        defs = parsed['structs'].get((qualifier, simple), set())
+        if len(defs) == 1:
+            return _expand_struct(simple, next(iter(defs)), qualifier, parsed, suffix, _seen)
+        if simple in parsed['contract_names']:
+            return f'address{suffix}'
+        raise UnresolvableType(f'unresolved qualified type: {type_text!r}')
+    name = base
     if (scope_contract, name) in parsed['enums'] or (None, name) in parsed['enums']:
         return f'uint8{suffix}'
     if name in parsed['contract_names']:
@@ -243,13 +265,7 @@ def _canonical_source_type(type_text: str, scope_contract, parsed, _seen=None) -
     if len(defs) > 1:
         raise UnresolvableType(f'ambiguous struct {name}: {len(defs)} distinct declarations')
     if defs:
-        members = next(iter(defs))
-        _seen = _seen or set()
-        if name in _seen:
-            raise UnresolvableType(f'recursive struct {name}')
-        _seen = _seen | {name}
-        inner = ','.join(_canonical_source_type(m, scope_contract, parsed, _seen) for m in members)
-        return f'({inner}){suffix}'
+        return _expand_struct(name, next(iter(defs)), scope_contract, parsed, suffix, _seen)
     raise UnresolvableType(f'unknown type: {type_text!r}')
 
 
