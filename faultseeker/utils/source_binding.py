@@ -33,6 +33,7 @@ canonicalized fails closed.
 
 import json
 import logging
+import posixpath
 import re
 
 import antlr4
@@ -46,6 +47,9 @@ log = logging.getLogger('faultseeker.source_binding')
 
 _SELECTOR_RE = re.compile(r'^0x[0-9a-fA-F]{8}$')
 _ARRAY_SUFFIX_RE = re.compile(r'(\[\d*\])+$')
+_IMPORT_SYMS_RE = re.compile(r'import\s*\{([^}]*)\}\s*from\s*["\']([^"\']+)["\']')
+_IMPORT_STAR_RE = re.compile(r'import\s*\*\s*as\s+(\w+)\s*from\s*["\']([^"\']+)["\']')
+_IMPORT_PLAIN_RE = re.compile(r'import\s*["\']([^"\']+)["\']')
 
 
 class UnresolvableType(Exception):
@@ -137,10 +141,13 @@ class _ScopedListener(SolidityListener):
             for spec in specs:
                 ip = getattr(spec, 'identifierPath', lambda: None)()
                 base = ip.getText() if ip is not None else spec.getText().split('(')[0]
-                bases.append(base.split('.')[-1])
+                # Keep the raw (possibly qualified / import-aliased) base
+                # text: identity is resolved against the importing file's
+                # import directives, never by qualifier stripping.
+                bases.append(base)
         self.current_contract = name
         self.contract_names.add(name)
-        self.contracts[name] = {'kind': kind, 'bases': bases, 'functions': {}}
+        self.contracts[name] = {'kind': kind, 'bases': bases, 'functions': {}, 'path': self.path}
 
     def exitContractDefinition(self, ctx):
         self.current_contract = None
@@ -185,11 +192,35 @@ class _ScopedListener(SolidityListener):
         self.enums.add((self.current_contract, ctx.identifier().getText()))
 
 
+def _parse_imports(code: str) -> dict:
+    """Parse a source unit's import directives.
+    Returns {'symbols': {alias: (path, original)}, 'file_aliases': {alias: path},
+    'plain': [path, ...]}."""
+    symbols, file_aliases, plain = {}, {}, []
+    for names, imp in _IMPORT_SYMS_RE.findall(code):
+        for part in names.split(','):
+            part = part.strip()
+            if not part:
+                continue
+            m = re.match(r'^(\w+)\s+as\s+(\w+)$', part)
+            if m:
+                symbols[m.group(2)] = (imp, m.group(1))
+            else:
+                symbols[part] = (imp, part)
+    for alias, imp in _IMPORT_STAR_RE.findall(code):
+        file_aliases[alias] = imp
+    for imp in _IMPORT_PLAIN_RE.findall(code):
+        plain.append(imp)
+    return {'symbols': symbols, 'file_aliases': file_aliases, 'plain': plain}
+
+
 def parse_source_units(sources: dict) -> dict:
     """Parse {path: solidity code} -> scoped bundle structure."""
     listener = _ScopedListener(path='')
-    combined = {'contracts': {}, 'structs': {}, 'enums': set(), 'contract_names': set()}
+    combined = {'contracts': {}, 'structs': {}, 'enums': set(), 'contract_names': set(), 'imports': {},
+                'sources_paths': set(sources.keys())}
     for path, code in sources.items():
+        combined['imports'][path] = _parse_imports(code)
         lis = _ScopedListener(path)
         try:
             input_stream = antlr4.InputStream(code)
@@ -292,11 +323,68 @@ def _sole_def(contract: str, parsed) -> dict:
     return defs[0]
 
 
+class UnsupportedAncestry(Exception):
+    """A base-class reference cannot be proven to a unique contract identity;
+    binding must fail closed."""
+
+
+def _resolve_import_path(imp: str, from_path: str, parsed):
+    """Resolve an import path to a key of parsed['sources_paths'].
+    Returns the matching source-unit path or None when it is not in the
+    bundle (never guesses by basename)."""
+    candidates = [posixpath.normpath(posixpath.join(posixpath.dirname(from_path), imp)), imp]
+    for cand in candidates:
+        if cand in parsed['sources_paths']:
+            return cand
+    return None
+
+
+def _resolve_base(base: str, from_path: str, parsed) -> str:
+    """Resolve a raw (possibly qualified / import-aliased) base-class name to
+    the globally unique contract name it refers to.
+
+    Import/source identity rules:
+      - `X as Y` symbol import: Y resolves ONLY to X in the imported file.
+      - `* as Q` file import: Q.Name resolves ONLY to Name in that file.
+      - Any other qualified name (Q.Name without a matching file alias) is
+        unsupported and fails closed - qualifier stripping could bind an
+        unrelated same-named contract.
+      - A plain name resolves by global name, requiring exactly one
+        declaration in the bundle (duplicates fail closed in _sole_def).
+    """
+    imports = parsed['imports'].get(from_path, {'symbols': {}, 'file_aliases': {}, 'plain': []})
+    if '.' in base:
+        qualifier, _, name = base.partition('.')
+        imp = imports['file_aliases'].get(qualifier)
+        if imp is None:
+            raise UnsupportedAncestry(f'qualified base {base} without import identity')
+        resolved_path = _resolve_import_path(imp, from_path, parsed)
+        if resolved_path is None:
+            raise UnsupportedAncestry(f'import {imp} not in bundle')
+        defs = [d for d in parsed['contracts'].get(name, []) if d['path'] == resolved_path]
+        if len(defs) != 1:
+            raise UnsupportedAncestry(f'{len(defs)} declarations of {name} in {resolved_path}')
+        return name
+    sym = imports['symbols'].get(base)
+    if sym is not None:
+        imp, orig = sym
+        resolved_path = _resolve_import_path(imp, from_path, parsed)
+        if resolved_path is None:
+            raise UnsupportedAncestry(f'import {imp} not in bundle')
+        defs = [d for d in parsed['contracts'].get(orig, []) if d['path'] == resolved_path]
+        if len(defs) != 1:
+            raise UnsupportedAncestry(f'{len(defs)} declarations of {orig} in {resolved_path}')
+        return orig
+    return base
+
+
 def _ancestors(contract: str, parsed) -> set:
     seen, stack = set(), [contract]
     while stack:
         cur = stack.pop()
-        for base in _sole_def(cur, parsed).get('bases', []):
+        cur_def = _sole_def(cur, parsed)
+        for raw_base in cur_def.get('bases', []):
+            base = _resolve_base(raw_base, cur_def.get('path', ''), parsed)
             if base in parsed['contracts'] and base not in seen:
                 _sole_def(base, parsed)  # ambiguous lineage fails closed
                 seen.add(base)
@@ -388,6 +476,8 @@ def bind_function(bundle: dict, parsed: dict, selector: str, lines_by_path: dict
                 found.extend(matches)
         except AmbiguousContract:
             return {'status': 'unresolved', 'bodies': [], 'reason': 'duplicate_contract_declarations'}
+        except UnsupportedAncestry as exc:
+            return {'status': 'unresolved', 'bodies': [], 'reason': f'unsupported_ancestry: {exc}'}
         if not found:
             return {'status': 'unresolved', 'bodies': [], 'reason': 'no_executable_body'}
         # effective implementation = unique most-derived candidate
