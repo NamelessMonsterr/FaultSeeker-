@@ -481,3 +481,44 @@ def test_same_layout_overload_via_qualified_name_fails_closed():
     res = bind_function(_bundle('Target', abi), parsed, sel, lines)
     assert res['status'] == 'unresolved'
     assert res['reason'] == 'multiple_bodies_in_contract'
+
+
+def test_unresolvable_direct_override_fails_closed_not_inherited():
+    """A derived contract declaring the same function name shadows the base
+    (Solidity name hiding). If the direct signature cannot be resolved, the
+    answer must be unresolved - never the ancestor's body."""
+    src = {'B.sol': ("pragma solidity ^0.8.0;\n"
+                     "contract Base { struct S { uint256 a; } function f(S memory s) public returns (uint256) { return 1; } }\n"
+                     "contract Target is Base {\n"
+                     "    function f(Mystery.S memory s) public returns (uint256) { return 2; }\n"
+                     "}\n")}
+    parsed, lines = _parsed(src)
+    abi = [{'type': 'function', 'name': 'f',
+            'inputs': [{'name': 's', 'type': 'tuple', 'internalType': 'struct Base.S',
+                        'components': [{'name': 'a', 'type': 'uint256'}]}],
+            'outputs': []}]
+    sel = function_selector('f', abi[0]['inputs'])
+    res = bind_function(_bundle('Target', abi), parsed, sel, lines)
+    assert res['status'] == 'unresolved'
+    assert res['reason'] == 'unresolvable_direct_signature'
+
+
+def test_import_alias_qualified_struct_binds_direct():
+    """import * as Lib; Child is Lib.Base; override f(Lib.Base.S): the qualified
+    struct resolves through the alias's simple contract name and binds the
+    direct override body."""
+    src = {'B.sol': ("pragma solidity ^0.8.0;\n"
+                     "contract Base { struct S { uint256 a; } function f(S memory s) public returns (uint256) { return 1; } }\n"),
+           'C.sol': ("pragma solidity ^0.8.0;\nimport * as Lib from './B.sol';\n"
+                     "contract Target is Lib.Base {\n"
+                     "    function f(Lib.Base.S memory s) public returns (uint256) { return 2; }\n"
+                     "}\n")}
+    parsed, lines = _parsed(src)
+    abi = [{'type': 'function', 'name': 'f',
+            'inputs': [{'name': 's', 'type': 'tuple', 'internalType': 'struct Base.S',
+                        'components': [{'name': 'a', 'type': 'uint256'}]}],
+            'outputs': []}]
+    sel = function_selector('f', abi[0]['inputs'])
+    res = bind_function(_bundle('Target', abi), parsed, sel, lines)
+    assert res['status'] == 'direct_verified'
+    assert 'return 2' in res['bodies'][0]['content']
