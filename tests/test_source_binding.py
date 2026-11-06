@@ -621,3 +621,38 @@ def test_block_comment_and_string_import_text_are_not_imports():
     assert res['status'] == 'inherited_verified'
     assert res['bodies'][0]['contract'] == 'Base'
     assert 'return 1' in res['bodies'][0]['content']
+
+
+def test_direct_import_never_relative_joined_to_wrong_file():
+    """Reviewer mustfix: src/Main.sol imports {Base as B} from 'lib/Base.sol'
+    but the bundle contains only src/lib/Base.sol (an unrelated wrong Base).
+    Direct (non-./) imports must match a source key EXACTLY; a relative-joined
+    guess would bind the wrong body, so this must fail closed."""
+    src = {
+        'src/lib/Base.sol': ("pragma solidity ^0.8.0;\n"
+                             "contract Base { function f(uint256 x) public returns (uint256) { return 999; } }\n"),
+        'src/Main.sol': ("pragma solidity ^0.8.0;\nimport {Base as B} from 'lib/Base.sol';\n"
+                         "contract Target is B {}\n"),
+    }
+    parsed, lines = _parsed(src)
+    sel = function_selector('f', F_UINT_ABI[0]['inputs'])
+    res = bind_function(_bundle('Target', F_UINT_ABI), parsed, sel, lines)
+    assert res['status'] == 'unresolved'
+    assert res['reason'].startswith('unsupported_ancestry')
+
+
+def test_direct_import_exact_key_still_resolves():
+    """Direct import path present verbatim as a source key resolves (this is
+    the flattened/remapped-bundle case, e.g. '@openzeppelin/...' keys)."""
+    src = {
+        'lib/Base.sol': ("pragma solidity ^0.8.0;\n"
+                         "contract Base { function f(uint256 x) public returns (uint256) { return 1; } }\n"),
+        'src/Main.sol': ("pragma solidity ^0.8.0;\nimport {Base as B} from 'lib/Base.sol';\n"
+                         "contract Target is B {}\n"),
+    }
+    parsed, lines = _parsed(src)
+    sel = function_selector('f', F_UINT_ABI[0]['inputs'])
+    res = bind_function(_bundle('Target', F_UINT_ABI), parsed, sel, lines)
+    assert res['status'] == 'inherited_verified'
+    assert res['bodies'][0]['contract'] == 'Base'
+    assert 'return 1' in res['bodies'][0]['content']
